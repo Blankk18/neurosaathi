@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-brand-50 text-brand-900 font-sans antialiased;
+    margin: 0;
+  }
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-3xl shadow-card p-5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl font-bold transition
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 px-6 py-4 text-lg shadow-lift;
+  }
+  .btn-secondary {
+    @apply btn bg-brand-100 text-brand-800 hover:bg-brand-200 px-6 py-4 text-lg;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-brand-700 hover:bg-brand-100 px-5 py-3;
+  }
+  .btn-danger {
+    @apply btn bg-accent-400 text-white hover:bg-accent-500 px-5 py-3;
+  }
+  .btn-huge {
+    @apply btn-primary w-full text-2xl py-6 rounded-3xl;
+  }
+  .tile {
+    @apply bg-white rounded-3xl shadow-card p-4 flex flex-col items-center justify-center text-center gap-1;
+  }
+  .label {
+    @apply block text-sm font-bold text-brand-700 mb-1.5;
+  }
+  .input {
+    @apply w-full rounded-2xl border-2 border-brand-200 bg-white px-4 py-3 text-lg
+      focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-200;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold;
+  }
+}
+
+/* Accessibility variant helpers */
+.high-contrast {
+  --tw-ring-color: rgba(0,0,0,0.6);
+}
+.high-contrast body,
+.high-contrast {
+  @apply text-black;
+}
+.high-contrast .card,
+.high-contrast .tile {
+  @apply border-2 border-black;
+}
+
+html.large-text {
+  font-size: 118%;
+}
+html.large-buttons .btn {
+  @apply py-5;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Gentle card flip animation for memory match */
+@keyframes flipIn {
+  from { transform: rotateY(90deg); opacity: 0.4; }
+  to { transform: rotateY(0); opacity: 1; }
+}
+.flip-in { animation: flipIn 0.3s ease; }
+
+@keyframes pop {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop { animation: pop 0.25s ease; }
+
+@keyframes fadeUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.fade-up { animation: fadeUp 0.3s ease; }
+
+@keyframes pulseSoft {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+.pulse-soft { animation: pulseSoft 2s ease-in-out infinite; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in { animation: fadeIn 0.4s ease; }

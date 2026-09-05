@@ -1,0 +1,285 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '@/state/AppContext';
+import { languageNames } from '@/i18n';
+import { createRecognizer, speechRecognitionSupported, speechSynthesisSupported } from '@/services/voice';
+import { BackIcon, HomeIcon } from './Icons';
+import { Toggle, Modal, Button } from './ui';
+
+// ============================================================================
+// Shared components: language selector, voice button, offline badge, etc.
+// ============================================================================
+
+export function LanguageSelector({ compact = false }: { compact?: boolean }) {
+  const { t, state, dispatch } = useApp();
+  const [open, setOpen] = useState(false);
+  const langs = Object.keys(languageNames);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-base font-bold text-brand-800 shadow-card"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        🌐 <span className="uppercase">{state.settings.language}</span>
+        <span className="text-xs">▾</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 z-40 mt-2 max-h-72 w-56 overflow-auto rounded-2xl bg-white p-1 shadow-lift pop" role="listbox">
+          {langs.map((l) => (
+            <button
+              key={l}
+              role="option"
+              aria-selected={state.settings.language === l}
+              onClick={() => {
+                dispatch({ type: 'SET_LANGUAGE', language: l as never });
+                setOpen(false);
+              }}
+              className={`block w-full rounded-xl px-3 py-2 text-left text-base font-semibold hover:bg-brand-50 ${state.settings.language === l ? 'bg-brand-100 text-brand-800' : 'text-neutral-700'}`}
+            >
+              {languageNames[l]}
+              {l !== 'en' && l !== 'hi' && !compact && <span className="ml-1 text-xs text-neutral-400">(sample)</span>}
+            </button>
+          ))}
+          <div className="px-3 py-2 text-xs text-neutral-400">{t('a11y.language')}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function OfflineBadge() {
+  const { isOffline, t } = useApp();
+  const cls = isOffline ? 'bg-warm-200 text-warm-500' : 'bg-brand-100 text-brand-700';
+  return (
+    <span className={`chip ${cls}`} aria-label={isOffline ? t('common.offline') : t('common.online')}>
+      {isOffline ? '🟠' : '🟢'} {isOffline ? t('common.offline') : t('common.online')}
+    </span>
+  );
+}
+
+export function VoiceButton({
+  onTranscript,
+  label,
+  size = 'lg',
+}: {
+  onTranscript: (text: string) => void;
+  label?: string;
+  size?: 'lg' | 'xl';
+}) {
+  const { t, lang } = useApp();
+  const [listening, setListening] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const recRef = useRef<ReturnType<typeof createRecognizer>>(null);
+
+  const stop = () => {
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* noop */
+    }
+    setListening(false);
+  };
+
+  const start = () => {
+    if (!speechRecognitionSupported()) {
+      setUnavailable(true);
+      return;
+    }
+    setUnavailable(false);
+    const rec = createRecognizer(lang);
+    if (!rec) {
+      setUnavailable(true);
+      return;
+    }
+    recRef.current = rec;
+    rec.onresult = (ev) => {
+      const transcript = ev.results[0]?.[0]?.transcript ?? '';
+      if (transcript) onTranscript(transcript);
+      stop();
+    };
+    rec.onerror = (ev) => {
+      if (ev.error === 'not-allowed') setUnavailable(true);
+      stop();
+    };
+    rec.onend = () => setListening(false);
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setUnavailable(true);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        onClick={listening ? stop : start}
+        aria-label={label ?? t('voice.tap')}
+        className={`rounded-full bg-accent-400 text-white font-extrabold shadow-lift hover:bg-accent-500 transition ${
+          size === 'xl' ? 'h-28 w-28 text-lg' : 'h-20 w-20 text-base'
+        } ${listening ? 'pulse-soft' : ''}`}
+      >
+        {listening ? '⏸' : '🎤'}
+        <span className="block text-xs font-bold">{listening ? t('voice.listening') : t('voice.tap')}</span>
+      </button>
+      {unavailable && (
+        <p className="max-w-xs text-center text-sm font-semibold text-accent-500">{t('voice.fallback')}</p>
+      )}
+    </div>
+  );
+}
+
+export function SpeakText({ text, langOverride }: { text: string; langOverride?: string }) {
+  const { speakText, state, t } = useApp();
+  const [done, setDone] = useState(false);
+  useEffect(() => setDone(false), [text]);
+  if (!state.settings.voiceOn || !speechSynthesisSupported()) return null;
+  return (
+    <button
+      onClick={() => {
+        speakText(text, langOverride);
+        setDone(true);
+        window.setTimeout(() => setDone(false), 2500);
+      }}
+      className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-brand-700 shadow-card hover:bg-brand-50"
+      aria-label={t('voice.listen')}
+    >
+      🔊 {done ? '✓' : ''}
+    </button>
+  );
+}
+
+const NAV_BTN_CLS =
+  'inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-lg font-bold text-brand-800 shadow-card hover:bg-brand-50 transition';
+
+/** Small round home shortcut used next to the back button. */
+export function HomeButton({ className = '' }: { className?: string }) {
+  const { t } = useApp();
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate('/home')}
+      aria-label={t('common.home')}
+      title={t('common.home')}
+      className={`inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-lg font-bold text-brand-800 shadow-card hover:bg-brand-50 transition ${className}`}
+    >
+      <HomeIcon /> <span className="hidden sm:inline">{t('common.home')}</span>
+    </button>
+  );
+}
+
+export function BackButton({ to, onBack }: { to?: string; onBack?: () => void }) {
+  const { t } = useApp();
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => {
+        if (onBack) onBack();
+        else if (to) navigate(to);
+        else navigate(-1);
+      }}
+      className={NAV_BTN_CLS}
+      aria-label={t('common.back')}
+    >
+      <BackIcon /> {t('common.back')}
+    </button>
+  );
+}
+
+/**
+ * Page header used by every internal page. Shows a clearly visible ← Back
+ * button (returns to the previous logical page, or `backTo`/onBack when given)
+ * plus an optional Home button. When `inProgress` is true, backing out asks
+ * "Leave game? Your current progress will be lost." with Continue / Leave.
+ */
+export function PageHeader({
+  title,
+  subtitle,
+  backTo,
+  onBack,
+  showHome = false,
+  inProgress = false,
+  right,
+}: {
+  title?: string;
+  subtitle?: string;
+  backTo?: string;
+  onBack?: () => void;
+  showHome?: boolean;
+  inProgress?: boolean;
+  right?: React.ReactNode;
+}) {
+  const { t } = useApp();
+  const navigate = useNavigate();
+  const [confirm, setConfirm] = useState(false);
+
+  const leave = () => {
+    if (inProgress) setConfirm(true);
+    else go();
+  };
+
+  const go = () => {
+    if (onBack) onBack();
+    else if (backTo) navigate(backTo);
+    else navigate(-1);
+  };
+
+  return (
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <BackButton onBack={leave} />
+          {showHome && <HomeButton />}
+        </div>
+        {right}
+      </div>
+
+      {title && <h1 className="mt-3 text-3xl font-extrabold text-brand-900">{title}</h1>}
+      {subtitle && (
+        <p className="mt-1 text-lg font-semibold text-brand-700">{subtitle}</p>
+      )}
+
+      <Modal open={confirm} onClose={() => setConfirm(false)} title={t('games.leave.confirm')}>
+        <p className="text-lg font-semibold text-brand-800">{t('games.leave.body')}</p>
+        <div className="mt-5 flex flex-col gap-3">
+          <Button variant="huge" onClick={() => setConfirm(false)}>
+            ▶ {t('games.leave.continue')}
+          </Button>
+          <Button variant="danger" onClick={go}>
+            {t('games.leave.leave')}
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export function AccessibilityControls() {
+  const { t, state, dispatch } = useApp();
+  const s = state.settings;
+  const set = (k: keyof typeof s, v: boolean) => {
+    dispatch({ type: 'UPDATE_SETTINGS', settings: { [k]: v } });
+    document.documentElement.classList.toggle(k === 'largeText' ? 'large-text' : k === 'largeButtons' ? 'large-buttons' : k === 'highContrast' ? 'high-contrast' : 'reduced-motion', v);
+  };
+  return (
+    <div className="card space-y-3">
+      <h3 className="text-xl font-extrabold text-brand-900">♿ {t('a11y.title')}</h3>
+      {(
+        [
+          ['largeText', t('a11y.font')],
+          ['largeButtons', t('a11y.buttons')],
+          ['highContrast', t('a11y.contrast')],
+          ['voiceOn', t('a11y.voice')],
+          ['simpleLanguage', t('a11y.simple')],
+          ['reducedMotion', t('a11y.motion')],
+        ] as const
+      ).map(([k, label]) => (
+        <div key={k}>
+          <Toggle checked={Boolean(s[k])} onChange={(v) => set(k, v)} label={label} />
+        </div>
+      ))}
+    </div>
+  );
+}

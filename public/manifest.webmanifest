@@ -1,0 +1,14 @@
+{
+  "name": "NeuroSaathi — Cognitive Companion",
+  "short_name": "NeuroSaathi",
+  "description": "AI-powered cognitive engagement and monitoring companion for elderly dementia care.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f1",
+  "theme_color": "#7a9c6e",
+  "lang": "en",
+  "categories": ["health", "accessibility"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
