@@ -27,22 +27,29 @@ export default function Landing() {
     <div className="min-h-screen bg-gradient-to-b from-brand-50 via-white to-brand-50">
       {/* top bar */}
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl" aria-hidden>
-            🍃
-          </span>
-          <span className="font-display text-xl font-bold text-brand-900">NEUROSAATHI</span>
-        </div>
+        <div className="flex items-center">
+  <img
+    src="/neurosaathi-header.png"
+    alt="NeuroSaathi"
+    className="h-14 w-auto object-contain"
+  />
+</div>
         <LanguageSelector />
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-16">
         {/* hero */}
         <section className="fade-up text-center">
-          <div className="mx-auto mt-6 flex h-28 w-28 items-center justify-center rounded-3xl bg-brand-100 text-6xl shadow-card" aria-hidden>
-            🌿
-          </div>
-          <h1 className="mt-5 font-display text-5xl font-bold text-brand-900 md:text-6xl">{t('brand.name')}</h1>
+         <div className="mx-auto mt-6 flex items-center justify-center" aria-hidden>
+  <img
+    src="/neurosaathi-full.png"
+    alt="NeuroSaathi"
+    className="h-64 w-auto object-contain"
+  />
+</div>
+          <p className="mt-3 text-2xl font-semibold text-brand-700">
+  {t('brand.tagline')}
+</p>
           <p className="mt-3 text-2xl font-semibold text-brand-700">{t('brand.tagline')}</p>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-neutral-600">{t('brand.blurb')}</p>
 

@@ -56,15 +56,18 @@ function PatientTopBar() {
   const name = state.patient?.name ?? t('home.friend');
   return (
     <header className="flex items-center justify-between px-4 py-4">
-      <div className="flex items-center gap-2">
-        <span className="text-3xl" aria-hidden>
-          🍃
-        </span>
-        <div>
-          <div className="text-sm font-bold text-brand-600">NEUROSAATHI</div>
-          <div className="text-lg font-extrabold leading-tight text-brand-900">{name}</div>
-        </div>
-      </div>
+      <div className="flex items-center gap-3">
+  <img
+    src="/neurosaathi-header.png"
+    alt="NeuroSaathi"
+    className="h-12 w-auto object-contain"
+  />
+  <div>
+    <div className="text-lg font-extrabold leading-tight text-brand-900">
+      {name}
+    </div>
+  </div>
+</div>
       <div className="flex items-center gap-2">
         <button
           onClick={() => speakText(`${t('home.greeting.morning')}, ${name}. ${t('voice.greet')}`)}
@@ -111,14 +114,12 @@ export function CaregiverShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-white shadow-card md:flex">
         <div className="flex items-center gap-2 px-5 py-5">
-          <span className="text-2xl" aria-hidden>
-            🍃
-          </span>
-          <div>
-            <div className="font-display text-lg font-bold text-brand-900">NEUROSAATHI</div>
-            <div className="text-xs font-semibold text-brand-600">{t('cg.nav.subtitle')}</div>
-          </div>
-        </div>
+  <img
+    src="/neurosaathi-header.png"
+    alt="NeuroSaathi"
+    className="h-12 w-auto object-contain"
+  />
+</div>
         <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Caregiver">
           {CAREGIVER_NAV.map(({ to, label, Icon, end }) => (
             <NavLink
