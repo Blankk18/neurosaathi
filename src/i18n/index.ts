@@ -1,11 +1,13 @@
 import { en } from './en';
 import { hi } from './hi';
+import { gu } from './gu';
 import { partials, languageNames } from './partials';
 import type { LanguageCode } from '@/types';
 
 const dictionaries: Record<string, Record<string, string>> = {
   en,
   hi,
+  gu,
   ...partials,
 };
 
@@ -28,9 +30,9 @@ export function getLanguageName(code: LanguageCode): string {
 
 /**
  * Languages the Browser Web Speech API can recognise for this device.
- * en/hi map to the common Indian locales; bn is broadly supported.
- * The remaining Northeast languages are not covered by mainstream ASR today,
- * so speech input gracefully falls back to buttons for them.
+ * en/hi/gu (and bn) map to the common Indian locales. The remaining
+ * Northeast languages are not covered by mainstream ASR today, so speech
+ * input gracefully falls back to buttons for them.
  */
 export function recognitionLocale(lang: LanguageCode): string | null {
   switch (lang) {
@@ -38,6 +40,8 @@ export function recognitionLocale(lang: LanguageCode): string | null {
       return 'en-IN';
     case 'hi':
       return 'hi-IN';
+    case 'gu':
+      return 'gu-IN';
     case 'bn':
       return 'bn-IN';
     default:
@@ -52,6 +56,8 @@ export function synthesisLocale(lang: LanguageCode): string {
       return 'en-IN';
     case 'hi':
       return 'hi-IN';
+    case 'gu':
+      return 'gu-IN';
     case 'bn':
       return 'bn-IN';
     default:

@@ -55,9 +55,18 @@ export default function Reminders() {
   }, [reminders]);
 
   const setStatus = (id: string, status: ReminderStatus) => {
+    const reminder = reminders.find((r) => r.id === id);
     dispatch({ type: 'UPDATE_REMINDER', id, status });
-    if (status === 'done') setToast(`✓ ${t('reminders.taken')}`);
-    else if (status === 'snoozed') setToast(`⏰ ${t('reminders.snoozed.toast')}`);
+    const name = reminder?.name ?? '';
+    if (status === 'done') {
+      setToast(`✓ ${t('reminders.taken')}`);
+      speakText(t('reminders.voice.done', { name }));
+    } else if (status === 'snoozed') {
+      setToast(`⏰ ${t('reminders.snoozed.toast')}`);
+      speakText(t('reminders.voice.snoozed', { name }));
+    } else {
+      setToast(`⏳ ${t('reminders.later')}`);
+    }
     window.setTimeout(() => setToast(null), 3000);
   };
 
@@ -81,6 +90,7 @@ export default function Reminders() {
     setShowAdd(false);
     setAddName('');
     setToast(`✓ ${newReminder.name} ${t('reminders.added')}`);
+    speakText(t('reminders.voice.added', { name: newReminder.name, time: addTime }));
     window.setTimeout(() => setToast(null), 3000);
   };
 

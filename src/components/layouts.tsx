@@ -1,9 +1,9 @@
-import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { HomeIcon, GamesIcon, BellIcon, HeartsIcon, ChartIcon, GridIcon, UserIcon, LightbulbIcon, AlertIcon } from './Icons';
-import { LanguageSelector, OfflineBadge } from './common';
-import { Toast } from './ui';
+import { AccessibilityControls, LanguageSelector, OfflineBadge } from './common';
+import { Modal, Toast } from './ui';
 
 // ============================================================================
 // Patient shell — big bottom navigation, calm top bar, tablet/mobile first.
@@ -17,8 +17,37 @@ const PATIENT_NAV = [
   { to: '/progress', label: 'nav.progress', Icon: ChartIcon },
 ];
 
+// Voice assistance: the page name (+ a short instruction where available) is
+// spoken aloud when arriving on a page, so the user always knows where they are.
+const PATIENT_PAGE_SPEECH: Record<string, string[]> = {
+  '/home': ['nav.home'],
+  '/games': ['games.title'],
+  '/games/memory': ['games.memory', 'memory.tap'],
+  '/games/scene': ['games.scene', 'scene.watch'],
+  '/games/pattern': ['games.pattern', 'pattern.watch'],
+  '/games/routine': ['games.routine', 'routine.watch'],
+  '/games/family': ['games.family', 'family.start.desc'],
+  '/games/region': ['games.region', 'region.familiar'],
+  '/reminders': ['reminders.title'],
+  '/memories': ['family.title'],
+  '/progress': ['progress.title'],
+  '/voice': ['voice.title'],
+  '/mood': ['mood.title'],
+};
+
 export function PatientShell({ children }: { children: React.ReactNode }) {
-  const { t } = useApp();
+  const { t, state, speakText } = useApp();
+  const location = useLocation();
+
+  // speak the page name (in the selected language) when the page changes
+  useEffect(() => {
+    const keys = PATIENT_PAGE_SPEECH[location.pathname];
+    if (!keys || !state.settings.voiceOn) return;
+    speakText(keys.map((k) => t(k)).join('. '));
+    // speakText already honours voiceOn; run once per page visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col pb-28">
       <PatientTopBar />
@@ -52,22 +81,19 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
 }
 
 function PatientTopBar() {
-  const { t, state, speakText } = useApp();
+  const { t, state, speakText, stopSpeaking } = useApp();
+  const [showA11y, setShowA11y] = useState(false);
   const name = state.patient?.name ?? t('home.friend');
   return (
-    <header className="flex items-center justify-between px-4 py-4">
-      <div className="flex items-center gap-3">
-  <img
-    src="/neurosaathi-header.png"
-    alt="NeuroSaathi"
-    className="h-12 w-auto object-contain"
-  />
-  <div>
-    <div className="text-lg font-extrabold leading-tight text-brand-900">
-      {name}
-    </div>
-  </div>
-</div>
+    <header className="flex flex-wrap items-center justify-between gap-y-2 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <img
+          src="/neurosaathi-header.png"
+          alt="NeuroSaathi"
+          className="h-10 max-sm:h-8 w-auto object-contain"
+        />
+        <div className="truncate text-lg font-extrabold leading-tight text-brand-900 max-sm:text-base">{name}</div>
+      </div>
       <div className="flex items-center gap-2">
         <button
           onClick={() => speakText(`${t('home.greeting.morning')}, ${name}. ${t('voice.greet')}`)}
@@ -76,7 +102,31 @@ function PatientTopBar() {
         >
           🔊
         </button>
+        {state.settings.voiceOn && (
+          <button
+            onClick={() => stopSpeaking()}
+            aria-label={t('a11y.stopVoice')}
+            title={t('a11y.stopVoice')}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-100 text-accent-500 shadow-card hover:bg-accent-200"
+          >
+            ⏹
+          </button>
+        )}
+        <button
+          onClick={() => setShowA11y(true)}
+          aria-label={t('a11y.title')}
+          title={t('a11y.title')}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-brand-700 shadow-card hover:bg-brand-50"
+        >
+          ♿
+        </button>
         <LanguageSelector compact />
+
+        <Modal open={showA11y} onClose={() => setShowA11y(false)} title={`♿ ${t('a11y.title')}`}>
+          <div className="max-h-[70vh] overflow-y-auto">
+            <AccessibilityControls />
+          </div>
+        </Modal>
       </div>
     </header>
   );
@@ -95,6 +145,16 @@ const CAREGIVER_NAV = [
   { to: '/caregiver/settings', label: 'cg.settings', Icon: ChartIcon },
 ];
 
+// Voice assistance on the caregiver side — name the section you land on.
+const CAREGIVER_PAGE_SPEECH: Record<string, string> = {
+  '/caregiver': 'cg.overview',
+  '/caregiver/patients': 'cg.patients',
+  '/caregiver/insights': 'cg.insights',
+  '/caregiver/alerts': 'cg.alerts',
+  '/caregiver/activity': 'cg.activity',
+  '/caregiver/settings': 'cg.settings',
+};
+
 function ClockNavIcon({ active }: { active?: boolean }) {
   return (
     <span className={active ? 'text-brand-700' : ''}>
@@ -107,9 +167,16 @@ function ClockNavIcon({ active }: { active?: boolean }) {
 }
 
 export function CaregiverShell({ children }: { children: React.ReactNode }) {
-  const { t, state } = useApp();
+  const { t, state, speakText } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const unread = state.alerts.filter((a) => !a.read).length;
+
+  useEffect(() => {
+    const key = CAREGIVER_PAGE_SPEECH[location.pathname];
+    if (!key || !state.settings.voiceOn) return;
+    speakText(t(key));
+  }, [location.pathname]);
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-white shadow-card md:flex">

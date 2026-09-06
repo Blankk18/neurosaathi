@@ -1,4 +1,4 @@
-import type { AppState } from '@/types';
+import type { AppState, Settings } from '@/types';
 import { buildDemoState, DEMO_PATIENT_ID } from '@/data/demoData';
 
 // ============================================================================
@@ -16,8 +16,21 @@ export function loadState(): AppState {
     const raw = localStorage.getItem(STATE_KEY);
     if (!raw) return buildDemoState();
     const parsed = JSON.parse(raw) as AppState;
-    // merge defaults in case of an older persisted shape
-    return { ...buildDemoState(), ...parsed };
+    // merge defaults in case of an older persisted shape — settings merge is
+    // deep so the 3-state text/button sizing always has a value.
+    const base = buildDemoState();
+    const state: AppState = {
+      ...base,
+      ...parsed,
+      settings: { ...base.settings, ...parsed.settings },
+    };
+    const legacy = parsed.settings as Partial<Settings> & { largeText?: boolean; largeButtons?: boolean };
+    if (legacy) {
+      // v1 stored booleans (largeText / largeButtons) → migrate to the enums.
+      if (legacy.textSize === undefined) state.settings.textSize = legacy.largeText ? 'large' : 'medium';
+      if (legacy.buttonSize === undefined) state.settings.buttonSize = legacy.largeButtons ? 'large' : 'standard';
+    }
+    return state;
   } catch {
     // corrupted or unavailable storage → start from demo data
     return buildDemoState();

@@ -70,11 +70,21 @@
   @apply border-2 border-black;
 }
 
+/* Text size: small / medium (default) / large */
+html.text-small {
+  font-size: 92%;
+}
+html.text-large,
 html.large-text {
   font-size: 118%;
 }
+/* Button size: standard (default) / large / extra large */
+html.button-large .btn,
 html.large-buttons .btn {
-  @apply py-5;
+  @apply py-5 text-xl;
+}
+html.button-xl .btn {
+  @apply py-6 px-8 text-2xl;
 }
 
 /* Reduced motion */

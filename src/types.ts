@@ -9,6 +9,7 @@ export type Role = 'elder' | 'caregiver';
 export type LanguageCode =
   | 'en'
   | 'hi'
+  | 'gu'
   | 'as'
   | 'bn'
   | 'mni'
@@ -18,6 +19,12 @@ export type LanguageCode =
   | 'trp';
 
 export type Difficulty = 1 | 2 | 3 | 4 | 5;
+
+/** Elder-friendly text sizing: small / medium (default) / large. */
+export type TextSize = 'small' | 'medium' | 'large';
+
+/** Elder-friendly button sizing: standard / large / extra large. */
+export type ButtonSize = 'standard' | 'large' | 'extra';
 
 export type GameKind =
   | 'memory-match'
@@ -175,11 +182,11 @@ export interface TimelineEvent {
 export interface Settings {
   voiceOn: boolean;
   speakInstructions: boolean;
-  largeText: boolean;
+  textSize: TextSize;
   highContrast: boolean;
   reducedMotion: boolean;
   simpleLanguage: boolean;
-  largeButtons: boolean;
+  buttonSize: ButtonSize;
   language: LanguageCode;
   simulateOffline: boolean;
 }

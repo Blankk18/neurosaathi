@@ -15,12 +15,13 @@ const DIFFERENTIATORS = [
 ];
 
 export default function Landing() {
-  const { t, dispatch } = useApp();
+  const { t } = useApp();
   const navigate = useNavigate();
 
+  // Demo sign-in: the buttons take the user to the login screen pre-selected
+  // for their role (Elder → Asha Sharma / asha123, Caretaker → care123).
   const pick = (role: 'elder' | 'caregiver') => {
-    dispatch({ type: 'SET_ROLE', role });
-    navigate(role === 'elder' ? '/home' : '/caregiver');
+    navigate(`/login?role=${role}`);
   };
 
   return (

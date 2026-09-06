@@ -5,6 +5,7 @@ import { languageNames } from '@/i18n';
 import { createRecognizer, speechRecognitionSupported, speechSynthesisSupported } from '@/services/voice';
 import { BackIcon, HomeIcon } from './Icons';
 import { Toggle, Modal, Button } from './ui';
+import type { Settings } from '@/types';
 
 // ============================================================================
 // Shared components: language selector, voice button, offline badge, etc.
@@ -39,7 +40,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
               className={`block w-full rounded-xl px-3 py-2 text-left text-base font-semibold hover:bg-brand-50 ${state.settings.language === l ? 'bg-brand-100 text-brand-800' : 'text-neutral-700'}`}
             >
               {languageNames[l]}
-              {l !== 'en' && l !== 'hi' && !compact && <span className="ml-1 text-xs text-neutral-400">(sample)</span>}
+              {l !== 'en' && l !== 'hi' && l !== 'gu' && !compact && <span className="ml-1 text-xs text-neutral-400">(sample)</span>}
             </button>
           ))}
           <div className="px-3 py-2 text-xs text-neutral-400">{t('a11y.language')}</div>
@@ -256,30 +257,125 @@ export function PageHeader({
   );
 }
 
-export function AccessibilityControls() {
-  const { t, state, dispatch } = useApp();
-  const s = state.settings;
-  const set = (k: keyof typeof s, v: boolean) => {
-    dispatch({ type: 'UPDATE_SETTINGS', settings: { [k]: v } });
-    document.documentElement.classList.toggle(k === 'largeText' ? 'large-text' : k === 'largeButtons' ? 'large-buttons' : k === 'highContrast' ? 'high-contrast' : 'reduced-motion', v);
-  };
+/** A row of mutually exclusive options (used for text / button size). */
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  ariaLabel: string;
+}) {
   return (
-    <div className="card space-y-3">
-      <h3 className="text-xl font-extrabold text-brand-900">♿ {t('a11y.title')}</h3>
-      {(
-        [
-          ['largeText', t('a11y.font')],
-          ['largeButtons', t('a11y.buttons')],
-          ['highContrast', t('a11y.contrast')],
-          ['voiceOn', t('a11y.voice')],
-          ['simpleLanguage', t('a11y.simple')],
-          ['reducedMotion', t('a11y.motion')],
-        ] as const
-      ).map(([k, label]) => (
-        <div key={k}>
-          <Toggle checked={Boolean(s[k])} onChange={(v) => set(k, v)} label={label} />
-        </div>
+    <div role="radiogroup" aria-label={ariaLabel} className="grid grid-cols-3 gap-2">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`rounded-2xl border-2 px-3 py-3 text-base font-bold transition ${
+            value === o.value ? 'border-brand-500 bg-brand-100 text-brand-900' : 'border-brand-100 bg-white text-neutral-600 hover:bg-brand-50'
+          }`}
+        >
+          {o.label}
+        </button>
       ))}
+    </div>
+  );
+}
+
+/** Stops any in-progress speech. Safe to press anytime. */
+export function StopVoiceButton({ className = '' }: { className?: string }) {
+  const { t, stopSpeaking } = useApp();
+  return (
+    <button
+      onClick={() => stopSpeaking()}
+      aria-label={t('a11y.stopVoice')}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-accent-300 bg-white px-4 py-3 text-lg font-extrabold text-accent-500 transition hover:bg-accent-50 ${className}`}
+    >
+      ⏹ {t('a11y.stopVoice')}
+    </button>
+  );
+}
+
+/**
+ * Elder-friendly accessibility panel. Preferences are persisted via settings
+ * (→ localStorage) and applied app-wide by AppContext. Includes 3-state text
+ * and button sizing, plus High Contrast / Simple Mode / Reduced Motion /
+ * Voice Assistance toggles and a Stop Voice control.
+ */
+export function AccessibilityControls() {
+  const { t, state, dispatch, speakText } = useApp();
+  const s = state.settings;
+
+  const set = (patch: Partial<Settings>) => dispatch({ type: 'UPDATE_SETTINGS', settings: patch });
+
+  const setText = (v: Settings['textSize']) => {
+    set({ textSize: v });
+    speakText(
+      t(v === 'large' ? 'a11y.text.large' : v === 'medium' ? 'a11y.text.medium' : 'a11y.text.small'),
+    );
+  };
+
+  const setButton = (v: Settings['buttonSize']) => {
+    set({ buttonSize: v });
+    speakText(
+      t(v === 'extra' ? 'a11y.button.xl' : v === 'large' ? 'a11y.button.large' : 'a11y.button.standard'),
+    );
+  };
+
+  return (
+    <div className="card space-y-5">
+      <h3 className="text-xl font-extrabold text-brand-900">♿ {t('a11y.title')}</h3>
+
+      <div>
+        <div className="mb-2 text-lg font-bold text-brand-800">🔠 {t('a11y.textSize')}</div>
+        <Segmented<Settings['textSize']>
+          value={s.textSize}
+          ariaLabel={t('a11y.textSize')}
+          onChange={setText}
+          options={[
+            { value: 'small', label: t('a11y.text.small') },
+            { value: 'medium', label: t('a11y.text.medium') },
+            { value: 'large', label: t('a11y.text.large') },
+          ]}
+        />
+      </div>
+
+      <div>
+        <div className="mb-2 text-lg font-bold text-brand-800">🔘 {t('a11y.buttonSize')}</div>
+        <Segmented<Settings['buttonSize']>
+          value={s.buttonSize}
+          ariaLabel={t('a11y.buttonSize')}
+          onChange={setButton}
+          options={[
+            { value: 'standard', label: t('a11y.button.standard') },
+            { value: 'large', label: t('a11y.button.large') },
+            { value: 'extra', label: t('a11y.button.xl') },
+          ]}
+        />
+      </div>
+
+      <div className="space-y-1">
+        {(
+          [
+            ['highContrast', t('a11y.contrast')],
+            ['simpleLanguage', t('a11y.simple')],
+            ['reducedMotion', t('a11y.motion')],
+            ['voiceOn', t('a11y.voiceAssist')],
+          ] as const
+        ).map(([k, label]) => (
+          <Toggle key={k} checked={Boolean(s[k])} onChange={(v) => set({ [k]: v })} label={label} />
+        ))}
+      </div>
+
+      <div>
+        <StopVoiceButton className="w-full" />
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useApp } from '@/state/AppContext';
 import { PatientShell, CaregiverShell } from '@/components/layouts';
 
 import Landing from '@/pages/Landing';
-import RoleSelect from '@/pages/RoleSelect';
+import Login from '@/pages/Login';
 import Onboarding from '@/pages/Onboarding';
 import Baseline from '@/pages/Baseline';
 import PatientHome from '@/pages/patient/PatientHome';
@@ -48,9 +48,9 @@ export default function App() {
     <Routes>
       {/* public */}
       <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<RoleSelect />} />
-      <Route path="/onboarding" element={role === 'elder' ? <Onboarding /> : <RoleSelect />} />
-      <Route path="/baseline" element={role === 'elder' ? <Baseline /> : <RoleSelect />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/onboarding" element={role === 'elder' ? <Onboarding /> : <Navigate to="/login" replace />} />
+      <Route path="/baseline" element={role === 'elder' ? <Baseline /> : <Navigate to="/login" replace />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/architecture" element={<Architecture />} />
       <Route path="/demo" element={<DemoMode />} />

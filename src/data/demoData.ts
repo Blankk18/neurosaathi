@@ -226,11 +226,11 @@ export function buildDemoState(): AppState {
     settings: {
       voiceOn: true,
       speakInstructions: true,
-      largeText: false,
+      textSize: 'medium',
       highContrast: false,
       reducedMotion: false,
       simpleLanguage: false,
-      largeButtons: true,
+      buttonSize: 'large',
       language: 'en',
       simulateOffline: false,
     },

@@ -42,6 +42,18 @@ export const en: Record<string, string> = {
   'login.elder.desc': 'Simple, calm, voice-assisted interface',
   'login.caregiver.desc': 'Monitoring, insights and alerts',
   'login.demo.hint': 'Use the role buttons below to switch views for the demo.',
+  'login.choose': 'Choose how you would like to sign in',
+  'login.elder.title': 'Elder Login',
+  'login.caregiver.title': 'Caretaker Login',
+  'login.patient.name': 'Asha Sharma',
+  'login.password': 'Password',
+  'login.password.placeholder': 'Enter your password',
+  'login.elder.hint': 'Hint: asha123',
+  'login.caregiver.hint': 'Hint: care123',
+  'login.error': 'That password is not correct. Please try again.',
+  'login.success.elder': 'Logged in. Taking you home.',
+  'login.success.caregiver': 'Logged in as caregiver.',
+  'login.demo.note': 'Demo login — no real account needed.',
 
   // Onboarding
   'onboard.title': 'Let’s get to know you',
@@ -207,6 +219,7 @@ export const en: Record<string, string> = {
   'voice.greet':
     'Hello! I’m NeuroSaathi. You can ask me to start a game, show reminders, or tell you your next activity.',
   'voice.repeat': 'Would you like me to repeat that?',
+  'voice.stopSpeech': 'Stop Voice',
 
   // Caregiver
   'cg.title': 'Caregiver Dashboard',
@@ -331,6 +344,16 @@ export const en: Record<string, string> = {
   'a11y.motion': 'Reduced motion',
   'a11y.buttons': 'Large buttons',
   'a11y.language': 'Language',
+  'a11y.textSize': 'Text size',
+  'a11y.text.small': 'Small',
+  'a11y.text.medium': 'Medium',
+  'a11y.text.large': 'Large',
+  'a11y.buttonSize': 'Button size',
+  'a11y.button.standard': 'Standard',
+  'a11y.button.large': 'Large',
+  'a11y.button.xl': 'Extra Large',
+  'a11y.stopVoice': 'Stop Voice',
+  'a11y.voiceAssist': 'Voice Assistance',
 
   // Offline
   'offline.banner': "You're offline. Your activities are still available.",
@@ -454,6 +477,9 @@ export const en: Record<string, string> = {
   'reminders.placeholder': 'e.g. Tea time',
   'reminders.snoozed.toast': '+30 min',
   'reminders.voice.due': 'It’s time for {name}.',
+  'reminders.voice.done': '{name} marked as done.',
+  'reminders.voice.snoozed': '{name} will remind you again in 30 minutes.',
+  'reminders.voice.added': 'Reminder added. {name} at {time}.',
 
   // Progress
   'progress.journey.desc':

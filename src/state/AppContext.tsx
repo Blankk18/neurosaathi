@@ -14,6 +14,7 @@ import { translate } from '@/i18n';
 import { isEffectivelyOffline, realConnectivity, subscribeConnectivity } from '@/services/offline';
 import { attemptSync, pendingSyncCount } from '@/services/sync';
 import { speak, stopSpeaking } from '@/services/voice';
+import { applyAccessibilityClasses } from '@/services/a11y';
 
 interface Ctx {
   state: AppState;
@@ -44,6 +45,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     saveState(state);
   }, [state]);
+
+  // keep accessibility preferences applied app-wide (text/button size,
+  // high contrast, reduced motion) whenever they change.
+  useEffect(() => {
+    applyAccessibilityClasses(state.settings);
+  }, [state.settings]);
 
   // connectivity listeners
   useEffect(() => {

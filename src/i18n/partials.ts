@@ -673,6 +673,7 @@ export const partials: Record<string, PartialDict> = {
 export const languageNames: Record<string, string> = {
   en: 'English',
   hi: 'हिन्दी (Hindi)',
+  gu: 'ગુજરાતી (Gujarati)',
   as: 'অসমীয়া (Assamese)',
   bn: 'বাংলা (Bengali)',
   mni: 'ꯃꯤꯇꯩꯂꯣꯟ (Manipuri/Meitei)',
