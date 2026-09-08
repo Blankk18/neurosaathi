@@ -95,25 +95,35 @@ await page.goto(BASE + '/games/memory', { waitUntil: 'domcontentloaded' });
 await page.getByRole('button', { name: /Start/i }).first().waitFor({ timeout: 10000 });
 ok('memory game launches (start screen)', true, 'end-to-end scoring: node scripts/memory-final.mjs');
 
-// ---- 5. Caregiver flow (switch role first — routes are role-gated) ----
+// ---- 5. Caregiver flow (login as caretaker, then drive via SPA nav) ----
+// currentRole is intentionally not persisted across page loads — you sign in on
+// each fresh load — so after login we stay inside the SPA and click the sidebar
+// links. A full page.goto() to a caregiver route would bounce back to /login.
 await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' });
-await page.getByRole('button', { name: /Caregiver/i }).first().click();
-await page.waitForTimeout(300);
+await page.getByText('Caretaker Login', { exact: false }).first().waitFor({ timeout: 12000 });
+await page.getByText('Caretaker Login', { exact: false }).first().click();
+const careForm = page.locator('form').filter({ hasText: 'Caretaker Login' });
+await careForm.locator('input[type="password"]').fill('care123');
+await careForm.locator('button[type="submit"]').click();
+// Landing on the caregiver shell: the sidebar links are now present.
+await page.getByRole('link', { name: /Insights/i }).first().waitFor({ timeout: 12000 });
 ok('switched to caregiver role', true);
-const cg = async (path, text, label) => {
-  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+
+async function cgNav(linkLabel, needle, label) {
+  await page.getByRole('link', { name: new RegExp(linkLabel, 'i') }).first().click();
   try {
-    await page.getByText(text, { exact: false }).first().waitFor({ timeout: 12000 });
+    await page.getByText(needle, { exact: false }).first().waitFor({ timeout: 12000 });
     ok(label, true);
   } catch {
-    ok(label, false, 'text not found on ' + path);
+    ok(label, false, 'text not found after navigating to ' + linkLabel);
   }
-};
-await cg('/caregiver', 'Asha Sharma', 'Caregiver overview');
-await cg('/caregiver/patients', 'Rohan', 'Caregiver patients');
-await cg('/caregiver/insights', 'not a medical diagnosis', 'Caregiver insights');
-await cg('/caregiver/alerts', 'Attention Indicator', 'Caregiver alerts');
-await cg('/caregiver/activity', 'Timeline', 'Caregiver activity');
+}
+
+ok('Caregiver overview', await page.getByText('Caregiver Dashboard', { exact: false }).first().isVisible().catch(() => false));
+await cgNav('Patients', 'Asha Sharma', 'Caregiver patients');
+await cgNav('Insights', 'not a medical diagnosis', 'Caregiver insights');
+await cgNav('Activity', "Today's Timeline", 'Caregiver activity');
+await cgNav('Alerts', 'This is not a diagnosis.', 'Caregiver alerts');
 
 // ---- 6. Privacy + Architecture ----
 await open('/architecture', 'System Architecture', 'Architecture');

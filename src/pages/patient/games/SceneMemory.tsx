@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/state/AppContext';
 import { PageHeader } from '@/components/common';
+import { Button } from '@/components/ui';
+import { BrainIcon, TimerIcon, TargetIcon, CheckCircleIcon, ChevronRightIcon } from '@/components/Icons';
 import { LEVEL_TO_SCENE_SECS } from '@/engine/adaptive';
 import { useGameSession } from './useGameSession';
 import GameResultScreen from './GameResultScreen';
@@ -50,6 +52,8 @@ export default function SceneMemory() {
   const [mistakes, setMistakes] = useState(0);
   const [respTimes, setRespTimes] = useState<number[]>([]);
   const [tick, setTick] = useState(() => Date.now());
+  // Presentation-only: gentle nudge for the last answer (true = correct, false = incorrect, null = none yet).
+  const [feedback, setFeedback] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (phase !== 'watch') return;
@@ -70,11 +74,13 @@ export default function SceneMemory() {
     setCorrect(0);
     setMistakes(0);
     setRespTimes([]);
+    setFeedback(null);
   };
 
   const answer = (opt: string) => {
     const rt = (Date.now() - tick) / 1000;
     const isCorrect = opt === t(questions[qIdx].correctKey);
+    setFeedback(isCorrect);
     const newCorrect = isCorrect ? correct + 1 : correct;
     const newMistakes = isCorrect ? mistakes : mistakes + 1;
     const newTimes = [...respTimes, rt];
@@ -91,10 +97,17 @@ export default function SceneMemory() {
   };
 
   return (
-    <div>
-      <PageHeader inProgress={phase !== 'done'} backTo="/games" showHome right={
-        <span className="chip bg-brand-100 text-brand-700">{t('games.level')} {level}</span>
-      } />
+    <div className="mx-auto w-full max-w-2xl">
+      <PageHeader
+        title={t('games.scene')}
+        subtitle={t('games.scene.desc')}
+        inProgress={phase !== 'done'}
+        backTo="/games"
+        showHome
+        right={
+          <span className="chip bg-brand-100 text-brand-700">{t('games.level')} {level}</span>
+        }
+      />
 
       {phase === 'done' && last && decision ? (
         <div className="mt-4">
@@ -102,29 +115,45 @@ export default function SceneMemory() {
         </div>
       ) : (
         <>
-          <h1 className="mt-4 text-2xl font-extrabold text-brand-900">{t('games.scene')}</h1>
-
           {phase === 'start' && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 p-6">
-              <div className="card max-w-sm text-center">
-                <span className="text-5xl" aria-hidden>🖼️</span>
-                <h2 className="mt-2 text-2xl font-extrabold text-brand-900">{t('scene.watch')}</h2>
-                <p className="mt-2 text-lg font-semibold text-brand-700">{t('scene.watch.hint')}</p>
-                <p className="mt-2 text-sm font-bold text-neutral-500">⏱ {watchSecs} {t('routine.secs')}</p>
-                <button onClick={() => { setPhase('watch'); setCountdown(watchSecs); }} className="btn-huge mt-5">
-                  ▶ {t('scene.ready')}
-                </button>
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/85 p-6 backdrop-blur-sm"
+              role="dialog"
+              aria-label={t('games.scene')}
+            >
+              <div className="card w-full max-w-md text-center pop fade-up">
+                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-100 text-brand-600 shadow-card">
+                  <BrainIcon size={48} />
+                </div>
+                <h2 className="mt-5 text-3xl font-extrabold text-brand-900">{t('games.scene')}</h2>
+                <p className="mt-2 text-xl font-semibold text-brand-700">{t('scene.watch')}</p>
+                <p className="mx-auto mt-2 max-w-xs text-lg font-semibold text-neutral-500">{t('scene.watch.hint')}</p>
+                <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-warm-50 px-4 py-2 text-base font-bold text-warm-600">
+                  <TimerIcon size={18} /> {watchSecs} {t('routine.secs')}
+                </div>
+                <div className="mt-6">
+                  <Button variant="huge" onClick={() => { setPhase('watch'); setCountdown(watchSecs); }}>
+                    ▶ {t('scene.ready')}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
 
           {phase === 'watch' && (
-            <div className="mt-3">
-              <div className="mb-2 flex items-center justify-between text-base font-bold text-brand-600">
-                <span>{t('scene.watch')}</span>
-                <span>⏳ {countdown}s</span>
+            <div className="mt-4 fade-up">
+              {/* Calm header: watch label + gentle countdown pill */}
+              <div className="flex items-center justify-between gap-4">
+                <span className="chip bg-brand-100 text-brand-700">
+                  <TargetIcon size={14} className="text-brand-600" /> {t('scene.watch')}
+                </span>
+                <span className={`chip ${countdown <= 3 ? 'bg-warm-100 text-warm-600' : 'bg-brand-50 text-brand-700'}`}>
+                  <TimerIcon size={14} /> {countdown}s
+                </span>
               </div>
-              <div className="relative h-80 w-full overflow-hidden rounded-3xl border-4 border-brand-100 bg-gradient-to-b from-brand-50 via-warm-50 to-brand-100">
+
+              {/* The scene — large, framed, calm */}
+              <div className="relative mt-4 h-80 w-full overflow-hidden rounded-3xl border border-brand-100 bg-gradient-to-b from-brand-50 via-warm-50 to-brand-100 shadow-card">
                 {SCENE.map((it, i) => (
                   <span key={it.labelKey + i} className="absolute" style={it.style} title={t(it.labelKey)} aria-label={t(it.labelKey)}>
                     {it.emoji}
@@ -133,21 +162,50 @@ export default function SceneMemory() {
                 {/* ground */}
                 <div className="absolute bottom-0 left-0 right-0 h-10 bg-brand-200/60" />
               </div>
-              <p className="mt-2 text-center text-base font-semibold text-neutral-500">{t('scene.watch.hint')}</p>
+
+              <p className="mt-3 text-center text-lg font-semibold text-neutral-500">{t('scene.watch.hint')}</p>
             </div>
           )}
 
           {phase === 'quiz' && (
-            <div className="mt-4">
-              <div className="text-base font-bold text-brand-600">
-                ❓ {qIdx + 1} / {questions.length}
+            <div className="mt-4 fade-up" key={qIdx}>
+              {/* Legible progress: gentle bar + step counter */}
+              <div className="flex items-center justify-between gap-4">
+                <span className="chip bg-brand-100 text-brand-700">
+                  <TargetIcon size={14} className="text-brand-600" /> {t('scene.question')}
+                </span>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-24 overflow-hidden rounded-full bg-brand-100" aria-hidden>
+                    <div
+                      className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                      style={{ width: `${((qIdx + 1) / questions.length) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-base font-bold text-brand-600">❓ {qIdx + 1} / {questions.length}</span>
+                </div>
               </div>
-              <h2 className="mt-2 text-2xl font-extrabold text-brand-900">{t(questions[qIdx].promptKey)}</h2>
+
+              {/* Gentle feedback for the last answer (never a harsh error) */}
+              <div className="mt-3 flex min-h-9 items-center justify-center">
+                {feedback === null ? (
+                  <p className="text-base font-semibold text-neutral-500">{t('routine.recall.hint')}</p>
+                ) : feedback ? (
+                  <p className="flex items-center gap-2 text-lg font-bold text-brand-600 pop">
+                    <CheckCircleIcon size={20} /> {t('pattern.correct')}
+                  </p>
+                ) : (
+                  <p className="text-lg pop text-warm-500">💛</p>
+                )}
+              </div>
+
+              <h2 className="mt-2 text-2xl font-extrabold text-brand-900 sm:text-3xl">{t(questions[qIdx].promptKey)}</h2>
+
               <div className="mt-4 grid grid-cols-1 gap-3">
                 {questions[qIdx].optionsKeys.map((ok) => { const o = t(ok); return (
-                  <button key={o} onClick={() => answer(o)} className="card flex items-center gap-3 text-left text-xl font-bold text-brand-900 hover:shadow-lift">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-lg">✓</span>
-                    {o}
+                  <button key={o} onClick={() => answer(o)} className="card flex w-full items-center gap-4 text-left text-xl font-bold text-brand-900 transition hover:shadow-lift active:scale-[0.99]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700">✓</span>
+                    <span className="flex-1">{o}</span>
+                    <ChevronRightIcon size={22} className="shrink-0 text-brand-300" />
                   </button>); })}
               </div>
             </div>

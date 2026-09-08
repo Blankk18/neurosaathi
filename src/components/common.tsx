@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { languageNames } from '@/i18n';
 import { createRecognizer, speechRecognitionSupported, speechSynthesisSupported } from '@/services/voice';
-import { BackIcon, HomeIcon } from './Icons';
+import { BackIcon, HomeIcon, SpeakerIcon, StopIcon } from './Icons';
 import { Toggle, Modal, Button } from './ui';
 import type { Settings } from '@/types';
 
@@ -27,7 +27,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
         <span className="text-xs">▾</span>
       </button>
       {open && (
-        <div className="absolute right-0 z-40 mt-2 max-h-72 w-56 overflow-auto rounded-2xl bg-white p-1 shadow-lift pop" role="listbox">
+        <div className="absolute right-0 z-40 mt-2 max-h-72 w-56 overflow-auto rounded-2xl bg-white p-1 shadow-float pop" role="listbox">
           {langs.map((l) => (
             <button
               key={l}
@@ -52,7 +52,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
 
 export function OfflineBadge() {
   const { isOffline, t } = useApp();
-  const cls = isOffline ? 'bg-warm-200 text-warm-500' : 'bg-brand-100 text-brand-700';
+  const cls = isOffline ? 'bg-warm-200 text-warm-600' : 'bg-brand-100 text-brand-700';
   return (
     <span className={`chip ${cls}`} aria-label={isOffline ? t('common.offline') : t('common.online')}>
       {isOffline ? '🟠' : '🟢'} {isOffline ? t('common.offline') : t('common.online')}
@@ -120,7 +120,7 @@ export function VoiceButton({
         aria-label={label ?? t('voice.tap')}
         className={`rounded-full bg-accent-400 text-white font-extrabold shadow-lift hover:bg-accent-500 transition ${
           size === 'xl' ? 'h-28 w-28 text-lg' : 'h-20 w-20 text-base'
-        } ${listening ? 'pulse-soft' : ''}`}
+        } ${listening ? 'pulse-soft ring-breath' : ''}`}
       >
         {listening ? '⏸' : '🎤'}
         <span className="block text-xs font-bold">{listening ? t('voice.listening') : t('voice.tap')}</span>
@@ -147,7 +147,7 @@ export function SpeakText({ text, langOverride }: { text: string; langOverride?:
       className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-brand-700 shadow-card hover:bg-brand-50"
       aria-label={t('voice.listen')}
     >
-      🔊 {done ? '✓' : ''}
+      <SpeakerIcon size={16} /> {done ? '✓' : ''}
     </button>
   );
 }
@@ -166,7 +166,7 @@ export function HomeButton({ className = '' }: { className?: string }) {
       title={t('common.home')}
       className={`inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-lg font-bold text-brand-800 shadow-card hover:bg-brand-50 transition ${className}`}
     >
-      <HomeIcon /> <span className="hidden sm:inline">{t('common.home')}</span>
+      <HomeIcon size={20} /> <span className="hidden sm:inline">{t('common.home')}</span>
     </button>
   );
 }
@@ -297,7 +297,7 @@ export function StopVoiceButton({ className = '' }: { className?: string }) {
       aria-label={t('a11y.stopVoice')}
       className={`inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-accent-300 bg-white px-4 py-3 text-lg font-extrabold text-accent-500 transition hover:bg-accent-50 ${className}`}
     >
-      ⏹ {t('a11y.stopVoice')}
+      <StopIcon size={20} /> {t('a11y.stopVoice')}
     </button>
   );
 }

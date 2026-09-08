@@ -85,7 +85,7 @@ export default function MemoryMatch() {
       return;
     }
 
-    // second card → resolve the pair
+    // second card -> resolve the pair
     setLocked(true);
     setAttempts((a) => a + 1);
     const first = deck[open];
@@ -119,62 +119,108 @@ export default function MemoryMatch() {
   }, [matched.length, phase]);
 
   return (
-    <div>
-      <PageHeader inProgress={phase !== 'done'} backTo="/games" showHome right={<>
-        <span className="chip bg-brand-100 text-brand-700">
-          {t('games.level')} {level}
-        </span>
-      </>} />
+    <div className="min-h-screen bg-canvas">
+      <PageHeader
+        inProgress={phase !== 'done'}
+        backTo="/games"
+        showHome
+        right={
+          <span className="chip bg-brand-100 text-brand-700">
+            {t('games.level')} {level}
+          </span>
+        }
+      />
 
       {phase === 'done' && last ? (
-        <div className="mt-4">
+        <div className="px-4 pt-6">
           <GameResultScreen result={last.result} decision={decision} onPlayAgain={reset} />
         </div>
       ) : (
-        <>
-          <h1 className="mt-4 text-2xl font-extrabold text-brand-900">{t('games.memory')}</h1>
-          <p className="mt-1 text-lg font-semibold text-brand-700">{t('memory.instructions')}</p>
+        <div className="px-4 pb-10">
+          {phase === 'start' ? (
+            /* ── Start screen ── */
+            <div className="mx-auto mt-10 flex max-w-sm flex-col items-center text-center">
+              <div className="card w-full space-y-5 py-10 px-6">
+                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-50 ring-4 ring-brand-100">
+                  <span className="text-5xl" aria-hidden>
+                    🧠
+                  </span>
+                </div>
 
-          {phase === 'start' && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 p-6">
-              <div className="card max-w-sm text-center">
-                <span className="text-5xl" aria-hidden>🧠</span>
-                <h2 className="mt-2 text-2xl font-extrabold text-brand-900">{t('games.memory')}</h2>
-                <p className="mt-2 text-lg font-semibold text-brand-700">{t('memory.instructions')}</p>
-                <p className="mt-2 text-sm font-bold text-neutral-500">{t('games.level')} {level} · {pairs} {t('memory.pairs.count')}</p>
-                <button onClick={reset} className="btn-huge mt-5">
+                <h2 className="text-2xl font-extrabold text-brand-900">
+                  {t('games.memory')}
+                </h2>
+
+                <p className="text-lg font-semibold leading-relaxed text-brand-700">
+                  {t('memory.instructions')}
+                </p>
+
+                <div className="divider" />
+
+                <p className="text-sm font-bold text-neutral-500">
+                  {t('games.level')} {level} · {pairs} {t('memory.pairs.count')}
+                </p>
+
+                <button onClick={reset} className="btn-huge mt-2 w-full">
                   ▶ {t('common.start')}
                 </button>
               </div>
             </div>
-          )}
-
-          {phase === 'play' && (
+          ) : (
+            /* ── Play phase ── */
             <>
-              <div className="mt-4 flex items-center gap-3 text-base font-bold text-brand-700">
-                <span>🎴 {t('memory.pairs')}: {matched.length}/{pairs}</span>
-                <span className="ml-auto">❌ {mistakes}</span>
+              <h1 className="mt-4 text-2xl font-extrabold text-brand-900">
+                {t('games.memory')}
+              </h1>
+
+              {/* gentle live progress */}
+              <div className="mt-5 flex items-center gap-3">
+                <span className="label text-brand-600">{t('memory.pairs')}</span>
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-brand-100">
+                  <div
+                    className="h-full rounded-full bg-brand-400 transition-all duration-500 ease-out"
+                    style={{ width: `${pairs > 0 ? (matched.length / pairs) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="label tabular-nums text-brand-700">
+                  {matched.length}/{pairs}
+                </span>
               </div>
-              <div className={`mt-4 grid gap-3 ${deck.length <= 6 ? 'grid-cols-3' : deck.length <= 8 ? 'grid-cols-4' : 'grid-cols-4'}`}>
+
+              {/* card grid */}
+              <div
+                className={`mt-6 grid gap-3 ${
+                  deck.length <= 6 ? 'grid-cols-3' : 'grid-cols-4'
+                }`}
+              >
                 {deck.map((c, i) => {
                   const isFaceUp = open === i || matched.includes(c.labelKey);
+                  const isMatched = matched.includes(c.labelKey);
                   return (
                     <button
                       key={c.id}
                       onClick={() => tapCard(i, c)}
                       aria-label={isFaceUp ? t(c.labelKey) : t('memory.hidden')}
-                      className={`relative flex aspect-square items-center justify-center rounded-2xl text-4xl shadow-card transition transform ${
-                        isFaceUp ? 'bg-brand-50' : 'bg-brand-600 text-white'
-                      } ${matched.includes(c.labelKey) ? 'opacity-60' : ''}`}
+                      className={`relative flex aspect-square items-center justify-center rounded-2xl text-4xl shadow-card transition-all duration-300 ${
+                        isMatched
+                          ? 'bg-brand-50 ring-2 ring-brand-200'
+                          : isFaceUp
+                            ? 'bg-brand-50 ring-2 ring-brand-300 shadow-lg'
+                            : 'bg-brand-600 text-white hover:bg-brand-500 active:scale-[0.97]'
+                      }`}
                     >
-                      {isFaceUp ? <span className="flip-in">{c.emoji}</span> : <span>❓</span>}
+                      {isFaceUp ? (
+                        <span className="flip-in">{c.emoji}</span>
+                      ) : (
+                        <span className="text-3xl opacity-70">❓</span>
+                      )}
                     </button>
                   );
                 })}
               </div>
             </>
           )}
-        </>
+        </div>
       )}
     </div>
   );

@@ -38,6 +38,14 @@ const COLORS = [
 ];
 const ATT_ROUNDS = [COLORS[0], COLORS[1], COLORS[2], COLORS[3], COLORS[0]];
 
+// Slim presentational palette (semantic tokens kept as literal ring colors).
+const RING = {
+  memory: '#518372',
+  attention: '#d0a361',
+  recall: '#f08641',
+  speed: '#4e7040',
+};
+
 interface Answer {
   phase: 'memory' | 'attention' | 'recall';
   correct: boolean;
@@ -151,16 +159,24 @@ export default function Baseline() {
   const baseline = state.profile?.baseline;
   const memoryDone = mIdx >= memoryQs.length;
 
+  // Presentational — a calm step guide (label-free, just a warm progress of dots).
+  const showGuide = phase !== 'intro' && phase !== 'result';
+  const guideIndex = ({ watch: 0, memory: 1, attention: 2, recall: 3 } as Record<string, number>)[phase] ?? 0;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50 to-white px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50 via-canvas to-canvas px-4 py-10">
       <div className="w-full max-w-xl fade-up">
         {phase === 'intro' && (
-          <Card className="text-center">
-            <span className="text-5xl" aria-hidden>
-              🌱
-            </span>
-            <h1 className="mt-3 text-2xl font-extrabold text-brand-900">{t('baseline.title')}</h1>
-            <div className="mt-3">
+          <Card className="text-center overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-brand-100/70 to-transparent" aria-hidden />
+            <div className="relative flex flex-col items-center py-2">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-warm-100 shadow-soft" aria-hidden>
+                <span className="text-5xl">🌱</span>
+              </div>
+              <h1 className="mt-4 text-2xl font-extrabold text-brand-900">{t('baseline.title')}</h1>
+              <p className="mt-2 max-w-md text-base font-semibold text-neutral-500">{t('baseline.desc')}</p>
+            </div>
+            <div className="mt-4">
               <Disclaimer>{t('baseline.disclaimer')}</Disclaimer>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3 text-left">
@@ -189,13 +205,29 @@ export default function Baseline() {
           </Card>
         )}
 
+        {showGuide && (
+          <div className="mb-4 flex items-center justify-center gap-2" aria-hidden>
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                key={i}
+                className={`h-2 rounded-full transition-all duration-500 ${i < (guideIndex ?? 0) ? 'w-2 bg-brand-400/50' : i === guideIndex ? 'w-8 bg-accent-400' : 'w-2 bg-brand-100'}`}
+              />
+            ))}
+          </div>
+        )}
+
         {phase === 'watch' && (
           <Card className="text-center">
-            <div className="mb-2 text-sm font-bold text-brand-600">⏳ {watchLeft}s</div>
-            <h2 className="text-xl font-extrabold text-brand-900">{t('scene.watch')}</h2>
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-brand-100 text-brand-800 shadow-inner" aria-hidden>
+              <div className="flex flex-col items-center leading-none">
+                <span className="text-4xl font-extrabold text-brand-800">{watchLeft}</span>
+              </div>
+            </div>
+            <div className="mt-2 text-sm font-bold text-brand-600">s</div>
+            <h2 className="mt-2 text-xl font-extrabold text-brand-900">{t('scene.watch')}</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {WATCH_ITEMS.map((it) => (
-                <div key={it.labelKey} className="flex h-24 items-center justify-center gap-2 rounded-2xl bg-brand-50 text-2xl">{it.emoji} {t(it.labelKey)}</div>
+                <div key={it.labelKey} className="flex h-28 items-center justify-center gap-2 rounded-3xl bg-brand-50 text-3xl shadow-soft">{it.emoji} {t(it.labelKey)}</div>
               ))}
             </div>
             <p className="mt-3 text-sm font-semibold text-neutral-500">{t('scene.watch.hint')}</p>
@@ -207,7 +239,7 @@ export default function Baseline() {
             <h2 className="text-xl font-extrabold text-brand-900">💭 {t(memoryQs[mIdx].promptKey)}</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {memoryQs[mIdx].options.map((o) => (
-                <button key={o.labelKey} onClick={() => askMemory(o, memoryQs[mIdx].correctKey)} className="tile flex h-24 items-center justify-center gap-2 text-2xl hover:shadow-lift">{o.emoji} {t(o.labelKey)}</button>
+                <button key={o.labelKey} onClick={() => askMemory(o, memoryQs[mIdx].correctKey)} className="tile flex h-28 items-center justify-center gap-2 text-3xl hover:shadow-lift rounded-3xl">{o.emoji} {t(o.labelKey)}</button>
               ))}
             </div>
           </Card>
@@ -219,7 +251,7 @@ export default function Baseline() {
             <p className="mt-2 text-lg font-semibold text-brand-700">{t('baseline.attention.prompt', { color: t(ATT_ROUNDS[attIdx].key) })}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {COLORS.map((c) => (
-                <button key={c.id} onClick={() => askAttention(c.id)} className={`tile h-24 text-5xl hover:shadow-lift ${c.id === ATT_ROUNDS[attIdx].id ? 'pulse-soft' : ''}`}>
+                <button key={c.id} onClick={() => askAttention(c.id)} className={`tile h-28 text-5xl hover:shadow-lift rounded-3xl ${c.id === ATT_ROUNDS[attIdx].id ? 'pulse-soft ring-4 ring-accent-200' : ''}`}>
                   {c.emoji}
                 </button>
               ))}
@@ -233,36 +265,43 @@ export default function Baseline() {
             <p className="mt-2 text-lg font-semibold text-brand-700">{t('baseline.recall.prompt')}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {recallOptions.map((o) => (
-                <button key={o.labelKey} onClick={() => askRecall(o)} className="tile flex h-24 items-center justify-center gap-2 text-2xl hover:shadow-lift">{o.emoji} {t(o.labelKey)}</button>
+                <button key={o.labelKey} onClick={() => askRecall(o)} className="tile flex h-28 items-center justify-center gap-2 text-3xl hover:shadow-lift rounded-3xl">{o.emoji} {t(o.labelKey)}</button>
               ))}
             </div>
           </Card>
         )}
 
         {phase === 'result' && baseline && (
-          <Card className="text-center">
-            <span className="text-5xl" aria-hidden>🎉</span>
-            <h2 className="mt-2 text-2xl font-extrabold text-brand-900">{t('baseline.complete')}</h2>
-            <p className="mt-1 text-base font-semibold text-neutral-600">{t('baseline.done.desc')}</p>
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <div className="flex flex-col items-center gap-1">
-                <ProgressRing value={baseline.memory} size={90} />
-                <span className="font-bold text-brand-800">{t('baseline.memory')}</span>
+          <Card className="text-center overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-warm-100/70 to-transparent" aria-hidden />
+            <div className="relative flex flex-col items-center py-1">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-warm-100 to-brand-100 shadow-soft" aria-hidden>
+                <span className="text-5xl" aria-hidden>🎉</span>
               </div>
-              <div className="flex flex-col items-center gap-1">
-                <ProgressRing value={baseline.attention} size={90} color="#b98545" />
-                <span className="font-bold text-brand-800">{t('baseline.attention')}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <ProgressRing value={baseline.recall} size={90} color="#c9442a" />
-                <span className="font-bold text-brand-800">{t('baseline.recall')}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <ProgressRing value={baseline.responseSpeed} size={90} color="#4e7040" />
-                <span className="font-bold text-brand-800">{t('baseline.speed')}</span>
+              <h2 className="mt-3 text-2xl font-extrabold text-brand-900">{t('baseline.complete')}</h2>
+              <p className="mt-1 max-w-sm text-base font-semibold text-neutral-600">{t('baseline.done.desc')}</p>
+            </div>
+            <div className="relative mt-4">
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <div className="flex flex-col items-center gap-1 rounded-3xl bg-brand-50 p-4">
+                  <ProgressRing value={baseline.memory} size={90} color={RING.memory} />
+                  <span className="font-bold text-brand-800">{t('baseline.memory')}</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 rounded-3xl bg-warm-50 p-4">
+                  <ProgressRing value={baseline.attention} size={90} color={RING.attention} />
+                  <span className="font-bold text-brand-800">{t('baseline.attention')}</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 rounded-3xl bg-accent-50 p-4">
+                  <ProgressRing value={baseline.recall} size={90} color={RING.recall} />
+                  <span className="font-bold text-brand-800">{t('baseline.recall')}</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 rounded-3xl bg-brand-50 p-4">
+                  <ProgressRing value={baseline.responseSpeed} size={90} color={RING.speed} />
+                  <span className="font-bold text-brand-800">{t('baseline.speed')}</span>
+                </div>
               </div>
             </div>
-            <div className="mt-4">
+            <div className="relative mt-4">
               <Disclaimer>{t('baseline.disclaimer')}</Disclaimer>
             </div>
             <p className="mt-3 text-sm font-semibold text-neutral-500">{t('baseline.takinghome')}</p>

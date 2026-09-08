@@ -1,9 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '@/state/AppContext';
-import { Card, Button, Modal, ProgressRing } from '@/components/ui';
+import { Card, Button, Modal, ProgressRing, Chip } from '@/components/ui';
 import { PageHeader, SpeakText } from '@/components/common';
 import { uid } from '@/data/demoData';
 import type { ReminderType, ReminderStatus } from '@/types';
+import {
+  PillIcon,
+  WaterIcon,
+  MealIcon,
+  WalkIcon,
+  AppointmentIcon,
+  SleepIcon,
+  SparkleIcon,
+  ClockIcon,
+  CheckIcon,
+  BellIcon,
+  PlusIcon,
+} from '@/components/Icons';
 
 const TYPE_EMOJI: Record<ReminderType, string> = {
   medicine: '💊',
@@ -13,6 +26,25 @@ const TYPE_EMOJI: Record<ReminderType, string> = {
   appointment: '📅',
   sleep: '😴',
   custom: '🔔',
+};
+
+// Tinted icon chips per reminder type — replaces the bare emoji tile.
+const TYPE_META: Record<ReminderType, { Icon: typeof PillIcon; tint: string }> = {
+  medicine: { Icon: PillIcon, tint: 'bg-brand-100 text-brand-700' },
+  water: { Icon: WaterIcon, tint: 'bg-info-100 text-info-700' },
+  meal: { Icon: MealIcon, tint: 'bg-warm-100 text-warm-700' },
+  walk: { Icon: WalkIcon, tint: 'bg-brand-50 text-brand-700 border border-brand-100' },
+  appointment: { Icon: AppointmentIcon, tint: 'bg-info-50 text-info-600 border border-info-100' },
+  sleep: { Icon: SleepIcon, tint: 'bg-brand-100 text-brand-800' },
+  custom: { Icon: SparkleIcon, tint: 'bg-accent-50 text-accent-600' },
+};
+
+// Soft status tint for the card's top strip — colour alone, no heavy borders.
+const STRIP_TINT: Record<ReminderStatus, string> = {
+  done: 'bg-brand-200/70',
+  pending: 'bg-warm-200/70',
+  snoozed: 'bg-info-200/70',
+  missed: 'bg-accent-200/70',
 };
 
 export default function Reminders() {
@@ -95,86 +127,181 @@ export default function Reminders() {
   };
 
   const list = sorted;
+  const doneCount = reminders.filter((r) => r.status === 'done').length;
 
   return (
-    <div>
-      <PageHeader title={t('reminders.title')} right={
-        <button onClick={() => setShowAdd(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-3xl text-white shadow-lift" aria-label={t('reminders.add')}>
-          +
-        </button>
-      } />
+    <div className="mx-auto max-w-2xl">
+      <PageHeader
+        title={t('reminders.title')}
+        right={
+          <button
+            onClick={() => setShowAdd(true)}
+            className="btn flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lift hover:bg-brand-700 focus-visible:ring-4 focus-visible:ring-brand-300"
+            aria-label={t('reminders.add')}
+          >
+            <PlusIcon size={22} />
+          </button>
+        }
+      />
 
-      <div className="mt-4 flex items-center gap-4 rounded-3xl bg-white p-4 shadow-card">
-        <ProgressRing value={adherence} size={72} />
-        <div className="flex-1">
-          <div className="text-lg font-extrabold text-brand-900">{t('reminders.adherence')}</div>
-          <div className="text-sm font-semibold text-neutral-500">
-            {reminders.filter((r) => r.status === 'done').length}/{reminders.length} {t('reminders.today')}
+      {/* Adherence overview — progress ring card with a soft top progress line */}
+      <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-card fade-up">
+        <div className="h-1.5 w-full bg-brand-100" aria-hidden>
+          <div
+            className="h-full rounded-full bg-brand-600 transition-all duration-500"
+            style={{ width: `${adherence}%` }}
+          />
+        </div>
+        <div className="flex items-center gap-5 p-5 sm:p-6">
+          <div className="shrink-0 rounded-3xl bg-brand-50 p-2.5">
+            <ProgressRing value={adherence} size={84} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-lg font-extrabold text-brand-900">{t('reminders.adherence')}</div>
+            <div className="mt-0.5 text-base font-semibold text-neutral-500">
+              {doneCount}/{reminders.length} {t('reminders.today')}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {isOffline && (
+                <Chip tone="warm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden /> {t('common.offline')}
+                </Chip>
+              )}
+            </div>
           </div>
         </div>
-        {isOffline && <span className="chip bg-warm-100 text-warm-500">🟠 {t('common.offline')}</span>}
       </div>
 
-      <div className="mt-5 space-y-3">
-        {list.map((r) => (
-          <Card key={r.id} className="p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-4xl" aria-hidden>{TYPE_EMOJI[r.type]}</span>
-              <div className="flex-1">
-                <div className="text-xl font-extrabold text-brand-900">{r.name}</div>
-                <div className="text-lg font-bold text-brand-600">🕐 {r.time}</div>
+      {/* Reminder list */}
+      <div className="mt-6 space-y-3.5">
+        {list.map((r) => {
+          const meta = TYPE_META[r.type];
+          const Icon = meta.Icon;
+          return (
+            <Card key={r.id} className="fade-up overflow-hidden p-0">
+              <div className={`h-1 w-full ${STRIP_TINT[r.status]}`} aria-hidden />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-start gap-4">
+                  <span
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${meta.tint}`}
+                    aria-hidden
+                  >
+                    <Icon size={26} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate pr-2 text-lg font-extrabold leading-tight text-brand-900">
+                          {r.name}
+                        </div>
+                        <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-base font-bold text-brand-700">
+                          <ClockIcon size={15} />
+                          {r.time}
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        {r.status === 'done' && (
+                          <Chip tone="brand">
+                            <CheckIcon size={14} /> {t('reminders.status.taken')}
+                          </Chip>
+                        )}
+                        {r.status === 'pending' && (
+                          <Chip tone="warm">
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />{' '}
+                            {t('reminders.status.pending')}
+                          </Chip>
+                        )}
+                        {r.status === 'snoozed' && (
+                          <Chip tone="info">
+                            <ClockIcon size={14} /> {t('reminders.snooze')}
+                          </Chip>
+                        )}
+                        {r.status === 'missed' && (
+                          <Chip tone="accent">{t('reminders.status.missed')}</Chip>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-2">
+                      <SpeakText text={`${r.name} at ${r.time}`} />
+                    </div>
+                  </div>
+                </div>
+
+                {(r.status === 'pending' || r.status === 'snoozed' || r.status === 'missed') && (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <Button variant="primary" size="md" onClick={() => setStatus(r.id, 'done')} className="!py-3 text-base">
+                      <CheckIcon size={16} /> {t('reminders.taken')}
+                    </Button>
+                    <Button variant="secondary" size="md" onClick={() => setStatus(r.id, 'snoozed')} className="!py-3 text-base">
+                      <ClockIcon size={16} /> {t('reminders.snooze')}
+                    </Button>
+                    <Button variant="ghost" size="md" onClick={() => setStatus(r.id, 'missed')} className="!py-3 text-base">
+                      <BellIcon size={16} /> {t('reminders.later')}
+                    </Button>
+                  </div>
+                )}
               </div>
-              {r.status === 'done' && <span className="chip bg-brand-600 text-white">✓ {t('reminders.status.taken')}</span>}
-              {r.status === 'pending' && <span className="chip bg-warm-100 text-warm-500">• {t('reminders.status.pending')}</span>}
-              {r.status === 'missed' && <span className="chip bg-accent-50 text-accent-400">{t('reminders.status.missed')}</span>}
+            </Card>
+          );
+        })}
+        {list.length === 0 && (
+          <Card className="py-10 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-400">
+              <BellIcon size={26} />
             </div>
-            {(r.status === 'pending' || r.status === 'snoozed' || r.status === 'missed') && (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <Button variant="primary" size="md" onClick={() => setStatus(r.id, 'done')} className="!py-3 text-base">
-                  ✓ {t('reminders.taken')}
-                </Button>
-                <Button variant="secondary" size="md" onClick={() => setStatus(r.id, 'snoozed')} className="!py-3 text-base">
-                  ⏰ {t('reminders.snooze')}
-                </Button>
-                <Button variant="ghost" size="md" onClick={() => setStatus(r.id, 'missed')} className="!py-3 text-base">
-                  ⏳ {t('reminders.later')}
-                </Button>
-              </div>
-            )}
-            <SpeakText text={`${r.name} at ${r.time}`} />
+            <p className="mt-3 text-lg font-bold text-neutral-500">{t('reminders.noReminders')}</p>
           </Card>
-        ))}
-        {list.length === 0 && <Card className="text-center text-neutral-500">{t('reminders.noReminders')}</Card>}
+        )}
       </div>
 
       {toast && (
-        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-brand-900 px-5 py-3 text-base font-bold text-white shadow-lift pop">
+        <div
+          className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-brand-900 px-5 py-3 text-base font-bold text-white shadow-lift pop"
+          role="status"
+          aria-live="polite"
+        >
           {toast}
         </div>
       )}
 
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title={`➕ ${t('reminders.custom')}`}>
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title={t('reminders.custom')}>
         <div className="space-y-4">
           <div>
             <label className="label">{t('family.name')}</label>
-            <input className="input" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder={t('reminders.placeholder')} />
+            <input
+              className="input"
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              placeholder={t('reminders.placeholder')}
+            />
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="label">🕐 {t('reminders.time.label')}</label>
+              <label className="label">
+                <span className="inline-flex items-center gap-1">
+                  <ClockIcon size={14} /> {t('reminders.time.label')}
+                </span>
+              </label>
               <input className="input" type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)} />
             </div>
             <div className="flex-1">
               <label className="label">{t('reminders.type.label')}</label>
-              <select className="input" value={addType} onChange={(e) => setAddType(e.target.value as ReminderType)}>
+              <select
+                className="input"
+                value={addType}
+                onChange={(e) => setAddType(e.target.value as ReminderType)}
+              >
                 {(Object.keys(TYPE_EMOJI) as ReminderType[]).map((k) => (
-                  <option key={k} value={k}>{t(`reminders.${k}`)}</option>
+                  <option key={k} value={k}>
+                    {t(`reminders.${k}`)}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
           <Button variant="huge" onClick={addReminder} className="!py-4">
-            ✅ {t('common.save')}
+            <CheckIcon size={20} /> {t('common.save')}
           </Button>
         </div>
       </Modal>

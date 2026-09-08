@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+/* NeuroSaathi — Fraunces (display serif) + Nunito (body) + script fallbacks
+   for हिन्दी / বাংলা / ગુજરાતી / অসমীয়া so regional languages render fully. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Nunito:ital,wght@0,400..900;1,400..900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Noto+Sans+Gujarati:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,12 +12,37 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-brand-50 text-brand-900 font-sans antialiased;
+    @apply bg-canvas text-brand-900 font-sans antialiased;
     margin: 0;
+    background-image:
+      radial-gradient(1100px 560px at 100% 0%, rgba(64, 107, 94, 0.05), transparent 62%),
+      radial-gradient(900px 520px at -8% 100%, rgba(210, 163, 97, 0.07), transparent 55%);
   }
   button {
     cursor: pointer;
     font-family: inherit;
+  }
+  /* Editorial serif display type across all headings — warm & premium. */
+  h1, h2, h3, h4 {
+    font-family: theme('fontFamily.display');
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: theme('colors.brand.200');
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.brand.200');
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.brand.300');
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 
@@ -37,7 +64,7 @@
     @apply btn bg-transparent text-brand-700 hover:bg-brand-100 px-5 py-3;
   }
   .btn-danger {
-    @apply btn bg-accent-400 text-white hover:bg-accent-500 px-5 py-3;
+    @apply btn bg-danger-500 text-white hover:bg-danger-600 px-5 py-3;
   }
   .btn-huge {
     @apply btn-primary w-full text-2xl py-6 rounded-3xl;
@@ -55,11 +82,23 @@
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold;
   }
+  /* Hairline divider for refined section separation. */
+  .divider {
+    @apply h-px w-full bg-brand-100;
+  }
+  /* Subtle pill badge with a status dot (online, severity, …). */
+  .badge-dot {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-sm font-bold text-brand-800;
+  }
+  .badge-dot::before {
+    content: '';
+    @apply h-2 w-2 rounded-full bg-brand-500;
+  }
 }
 
 /* Accessibility variant helpers */
 .high-contrast {
-  --tw-ring-color: rgba(0,0,0,0.6);
+  --tw-ring-color: rgba(0, 0, 0, 0.6);
 }
 .high-contrast body,
 .high-contrast {
@@ -110,19 +149,19 @@ html.reduced-motion *::after {
 .flip-in { animation: flipIn 0.3s ease; }
 
 @keyframes pop {
-  0% { transform: scale(0.9); opacity: 0; }
+  0% { transform: scale(0.92); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
-.pop { animation: pop 0.25s ease; }
+.pop { animation: pop 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
 
 @keyframes fadeUp {
-  from { transform: translateY(10px); opacity: 0; }
+  from { transform: translateY(12px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
-.fade-up { animation: fadeUp 0.3s ease; }
+.fade-up { animation: fadeUp 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
 
 @keyframes pulseSoft {
-  0%,100% { transform: scale(1); }
+  0%, 100% { transform: scale(1); }
   50% { transform: scale(1.06); }
 }
 .pulse-soft { animation: pulseSoft 2s ease-in-out infinite; }
@@ -132,3 +171,10 @@ html.reduced-motion *::after {
   to { opacity: 1; }
 }
 .fade-in { animation: fadeIn 0.4s ease; }
+
+/* Breathing ring behind the voice button while listening. */
+@keyframes ringBreath {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240, 134, 65, 0.35); }
+  50% { box-shadow: 0 0 0 18px rgba(240, 134, 65, 0); }
+}
+.ring-breath { animation: ringBreath 1.8s ease-in-out infinite; }

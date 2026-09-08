@@ -9,16 +9,19 @@ export function Card({
   children,
   className = '',
   onClick,
+  tone = 'default',
 }: {
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  tone?: 'default' | 'tinted';
 }) {
   const Wrapper = onClick ? 'button' : 'div';
+  const tint = tone === 'tinted' ? 'bg-brand-50/70' : 'bg-white';
   return (
     <Wrapper
       onClick={onClick}
-      className={`card ${onClick ? 'text-left w-full hover:shadow-lift transition' : ''} ${className}`}
+      className={`card ${tint} ${onClick ? 'text-left w-full hover:shadow-lift transition' : ''} ${className}`}
     >
       {children}
     </Wrapper>
@@ -65,7 +68,7 @@ export function ProgressRing({
   value,
   size = 96,
   stroke = 10,
-  color = '#638c52',
+  color = '#518372',
   label,
 }: {
   value: number;
@@ -80,7 +83,7 @@ export function ProgressRing({
   return (
     <div className="relative inline-flex items-center justify-center" role="img" aria-label={label ?? `${value}%`}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e7eee2" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e0ebe7" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -147,19 +150,31 @@ export function Toggle({
       aria-checked={checked}
     >
       <span className="text-lg font-semibold">{label}</span>
-      <span className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition ${checked ? 'bg-brand-500' : 'bg-neutral-200'}`}>
-        <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${checked ? 'translate-x-7' : 'translate-x-1'}`} />
+      <span
+        className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition ${checked ? 'bg-brand-500' : 'bg-neutral-200'}`}
+      >
+        <span
+          className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${checked ? 'translate-x-7' : 'translate-x-1'}`}
+        />
       </span>
     </button>
   );
 }
 
-export function Chip({ children, tone = 'brand' }: { children: React.ReactNode; tone?: 'brand' | 'warm' | 'accent' | 'neutral' }) {
+export function Chip({
+  children,
+  tone = 'brand',
+}: {
+  children: React.ReactNode;
+  tone?: 'brand' | 'warm' | 'accent' | 'neutral' | 'info' | 'danger';
+}) {
   const tones = {
     brand: 'bg-brand-100 text-brand-800',
-    warm: 'bg-warm-100 text-warm-500',
-    accent: 'bg-accent-50 text-accent-400',
+    warm: 'bg-warm-100 text-warm-600',
+    accent: 'bg-accent-50 text-accent-600',
     neutral: 'bg-neutral-100 text-neutral-600',
+    info: 'bg-info-100 text-info-700',
+    danger: 'bg-danger-50 text-danger-600',
   };
   return <span className={`chip ${tones[tone]}`}>{children}</span>;
 }
@@ -205,7 +220,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-3xl bg-white p-6 shadow-lift pop"
+        className="w-full max-w-md rounded-xl2 bg-white p-6 shadow-float pop"
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -213,7 +228,11 @@ export function Modal({
       >
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-2xl font-extrabold text-brand-900">{title}</h3>
-          <button onClick={onClose} aria-label="Close" className="rounded-full bg-neutral-100 p-2 text-xl hover:bg-neutral-200">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-full bg-neutral-100 p-2 text-xl hover:bg-neutral-200"
+          >
             ✕
           </button>
         </div>
@@ -243,6 +262,38 @@ export function EmojiView({ name }: { name: string }) {
   return (
     <div className="flex h-full w-full items-center justify-center text-5xl" aria-hidden>
       <span>{name}</span>
+    </div>
+  );
+}
+
+/** Calm empty state — used when a list or dashboard has nothing to show. */
+export function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon?: string;
+  title: string;
+  body?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="card flex flex-col items-center gap-2 py-10 text-center">
+      {icon && <div className="text-5xl" aria-hidden>{icon}</div>}
+      <div className="text-xl font-extrabold text-brand-900">{title}</div>
+      {body && <div className="max-w-sm text-base font-semibold text-neutral-500">{body}</div>}
+      {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
+
+/** Gentle loading placeholder — keeps layout stable while data settles. */
+export function LoadingState({ label }: { label?: string }) {
+  return (
+    <div className="card flex flex-col items-center gap-3 py-10 text-center" role="status" aria-live="polite">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" />
+      {label && <div className="text-base font-bold text-neutral-500">{label}</div>}
     </div>
   );
 }

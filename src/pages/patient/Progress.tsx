@@ -2,7 +2,17 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { Card, SectionTitle, StatTile } from '@/components/ui';
-import { PageHeader } from '@/components/common';
+import { PageHeader, SpeakText } from '@/components/common';
+import {
+  BrainIcon,
+  TargetIcon,
+  LightbulbIcon,
+  SparkleIcon,
+  CalendarIcon,
+  ChevronRightIcon,
+  MoodHappyIcon,
+  LeafIcon,
+} from '@/components/Icons';
 
 function thisWeekRange(): [Date, Date] {
   const now = new Date();
@@ -53,34 +63,62 @@ export default function Progress() {
     <div>
       <PageHeader title={t('progress.title')} subtitle={patient?.name} />
 
-      <div className="mt-4 rounded-3xl bg-brand-700 p-5 text-white shadow-lift">
-        <h2 className="text-xl font-extrabold">🎯 {t('progress.week')}</h2>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-2xl bg-white/10 p-3 text-center">
-            <div className="text-2xl font-extrabold">{delta(weekly.memory)}</div>
-            <div className="text-sm font-bold">{t('progress.memory')}</div>
+      {/* Hero band — this week at a glance */}
+      <section className="mt-2 rounded-xl2 bg-brand-700 p-6 text-white shadow-lift fade-up">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-100">
+            <CalendarIcon size={18} />
+            <span>{t('progress.week')}</span>
           </div>
-          <div className="rounded-2xl bg-white/10 p-3 text-center">
-            <div className="text-2xl font-extrabold">{delta(weekly.attention)}</div>
-            <div className="text-sm font-bold">{t('progress.attention')}</div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-bold">
+            <SparkleIcon size={16} />
+            {weekly.activeDays}/{Math.max(7, weekly.activeDays)} {t('progress.days')}
+          </span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-2xl bg-white/10 p-4 text-center">
+            <BrainIcon size={26} className="mx-auto text-brand-100" />
+            <div className="mt-2 text-2xl font-extrabold">{delta(weekly.memory)}</div>
+            <div className="text-sm font-bold text-brand-50">{t('progress.memory')}</div>
           </div>
-          <div className="rounded-2xl bg-white/10 p-3 text-center">
-            <div className="text-2xl font-extrabold">{delta(weekly.recall)}</div>
-            <div className="text-sm font-bold">{t('progress.recall')}</div>
+          <div className="rounded-2xl bg-white/10 p-4 text-center">
+            <TargetIcon size={26} className="mx-auto text-brand-100" />
+            <div className="mt-2 text-2xl font-extrabold">{delta(weekly.attention)}</div>
+            <div className="text-sm font-bold text-brand-50">{t('progress.attention')}</div>
           </div>
-          <div className="rounded-2xl bg-white/10 p-3 text-center">
-            <div className="text-2xl font-extrabold">{weekly.activeDays}/{Math.max(7, weekly.activeDays)}</div>
-            <div className="text-sm font-bold">{t('progress.activities')}</div>
+          <div className="rounded-2xl bg-white/10 p-4 text-center">
+            <LightbulbIcon size={26} className="mx-auto text-brand-100" />
+            <div className="mt-2 text-2xl font-extrabold">{delta(weekly.recall)}</div>
+            <div className="text-sm font-bold text-brand-50">{t('progress.recall')}</div>
+          </div>
+          <div className="rounded-2xl bg-white/10 p-4 text-center">
+            <SparkleIcon size={26} className="mx-auto text-brand-100" />
+            <div className="mt-2 text-2xl font-extrabold">{weekly.activeDays}/{Math.max(7, weekly.activeDays)}</div>
+            <div className="text-sm font-bold text-brand-50">{t('progress.activities')}</div>
           </div>
         </div>
+      </section>
+
+      {/* Current levels — easy-to-read tiles */}
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <StatTile label={t('progress.memory')} value={weekly.memNow} hint="% " trend={{ up: weekly.memory >= 0, text: delta(weekly.memory) }} />
+        <StatTile label={t('progress.recall')} value={weekly.recNow} hint="% " trend={{ up: weekly.recall >= 0, text: delta(weekly.recall) }} />
       </div>
 
-      <div className="mt-5">
-        <SectionTitle icon="🌄">{t('progress.journey')}</SectionTitle>
-        <Card>
-          <p className="text-xl font-bold text-brand-900">🌟 {t('progress.encourage')}</p>
-          <div className="mt-3 flex items-center gap-4">
-            <span className="text-4xl" aria-hidden>🌱</span>
+      {/* Encouragement + personal journey */}
+      <div className="mt-6">
+        <SectionTitle icon="🌿">{t('progress.journey')}</SectionTitle>
+        <Card tone="tinted" className="space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xl font-extrabold text-brand-900">🙂 {t('progress.encourage')}</p>
+            <SpeakText text={t('progress.encourage')} />
+          </div>
+          <div className="divider" />
+          <div className="flex items-center gap-4">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-100 text-brand-600" aria-hidden>
+              <LeafIcon size={34} />
+            </span>
             <p className="text-base text-neutral-600">
               {t('progress.journey.desc')}
             </p>
@@ -88,17 +126,15 @@ export default function Progress() {
         </Card>
       </div>
 
-      <div className="mt-5 space-y-3">
-        <StatTile label={t('progress.memory')} value={weekly.memNow} hint="% " trend={{ up: weekly.memory >= 0, text: delta(weekly.memory) }} />
-        <StatTile label={t('progress.recall')} value={weekly.recNow} hint="% " trend={{ up: weekly.recall >= 0, text: delta(weekly.recall) }} />
-      </div>
-
-      <button onClick={() => navigate('/mood')} className="card mt-5 flex w-full items-center gap-3 text-left hover:shadow-lift">
-        <span className="text-4xl" aria-hidden>💬</span>
-        <div>
+      <button onClick={() => navigate('/mood')} className="card mt-6 flex w-full items-center gap-4 text-left hover:shadow-lift">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-accent-100 text-accent-600" aria-hidden>
+          <MoodHappyIcon size={26} />
+        </span>
+        <div className="flex-1">
           <div className="text-lg font-extrabold text-brand-900">{t('progress.mood.question')}</div>
           <div className="text-sm font-semibold text-neutral-500">{t('progress.mood.sub')}</div>
         </div>
+        <ChevronRightIcon size={24} className="text-brand-300" />
       </button>
     </div>
   );

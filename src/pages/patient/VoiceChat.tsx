@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { PageHeader, VoiceButton } from '@/components/common';
 import { speechRecognitionSupported } from '@/services/voice';
+import { BellIcon, BrainIcon, CalendarIcon, ClockIcon, GamesIcon, HomeIcon, LightbulbIcon, MicIcon } from '@/components/Icons';
 import type { GameKind } from '@/types';
 
 interface Msg {
@@ -97,52 +98,67 @@ export default function VoiceChat() {
   const support = speechRecognitionSupported();
 
   return (
-    <div className="flex min-h-[70vh] flex-col">
+    <div className="flex min-h-[70vh] flex-col px-1 pb-4">
       <PageHeader title={t('voice.title')} />
       <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-brand-700">
-        <span aria-hidden>🤖</span> NeuroSaathi
+        <BrainIcon size={20} /> NeuroSaathi
       </div>
 
       {!support && (
-        <div className="mt-4 rounded-2xl border-2 border-accent-200 bg-accent-50 p-4 text-base font-bold text-accent-500">
+        <div className="mt-4 rounded-2xl bg-danger-50 px-5 py-4 text-base font-bold text-danger-600">
           {t('voice.fallback')}
         </div>
       )}
 
-      <div className="mt-4 flex flex-1 flex-col gap-3 overflow-y-auto rounded-3xl bg-white/70 p-4 shadow-card" style={{ maxHeight: '52vh' }}>
+      <div className="mt-4 flex flex-1 flex-col gap-3 overflow-y-auto rounded-3xl bg-white/70 p-5 shadow-card" style={{ maxHeight: '52vh' }}>
         {msgs.length === 0 && (
-          <p className="text-center text-base font-semibold text-neutral-500">
-            {t('voice.greet')}
-            <br />
-            {t('voice.try')}: “{t('voice.suggest.startGame')}”, “{t('voice.suggest.routine')}”, “{t('voice.suggest.reminders')}”, “{t('voice.suggest.next')}” or “{t('voice.suggest.gohome')}”.
-          </p>
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
+              <LightbulbIcon size={28} className="text-brand-600" />
+            </div>
+            <p className="text-lg font-semibold text-brand-800">{t('voice.greet')}</p>
+            <p className="max-w-xs text-base text-brand-500">
+              {t('voice.try')}: &ldquo;{t('voice.suggest.startGame')}&rdquo;, &ldquo;{t('voice.suggest.routine')}&rdquo;, &ldquo;{t('voice.suggest.reminders')}&rdquo;, &ldquo;{t('voice.suggest.next')}&rdquo; or &ldquo;{t('voice.suggest.gohome')}&rdquo;.
+            </p>
+          </div>
         )}
         {msgs.map((m, i) => (
           <div key={i} className={`flex ${m.from === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`pop max-w-[85%] rounded-3xl px-4 py-3 text-lg font-semibold ${
-                m.from === 'user' ? 'bg-brand-600 text-white' : 'bg-brand-100 text-brand-900'
+              className={`pop max-w-[85%] rounded-2xl px-5 py-3 text-lg font-semibold shadow-sm ${
+                m.from === 'user'
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white text-brand-800 shadow-card'
               }`}
             >
-              {m.from === 'assistant' && <span className="mr-1" aria-hidden>🤖</span>}
+              {m.from === 'assistant' && (
+                <div className="mb-1 flex items-center gap-1.5">
+                  <BrainIcon size={14} className="text-brand-500" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-brand-400">NeuroSaathi</span>
+                </div>
+              )}
               {m.text}
-              <span className={`ml-2 block text-xs ${m.from === 'user' ? 'text-brand-200' : 'text-brand-500'}`}>{m.time}</span>
+              <span className={`ml-2 block text-xs ${m.from === 'user' ? 'text-brand-200' : 'text-brand-400'}`}>{m.time}</span>
             </div>
           </div>
         ))}
         <div className="h-1" />
       </div>
 
-      <div className="mt-4 flex flex-col items-center gap-2">
+      <div className="mt-4 flex flex-col items-center gap-3">
         <VoiceButton onTranscript={process} label={t('voice.tap')} size="xl" />
-        {heard && <p className="text-sm font-semibold text-neutral-500">🎙 {t('voice.heard')}: “{heard}”</p>}
+        {heard && (
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-brand-500">
+            <MicIcon size={14} /> {t('voice.heard')}: &ldquo;{heard}&rdquo;
+          </p>
+        )}
         {/* button-only fallback commands */}
-        <div className="mt-2 flex flex-wrap justify-center gap-2">
-          <button onClick={() => process(t('voice.cmd.memory'))} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-700 shadow-card">🧠 {t('voice.suggest.startGame')}</button>
-          <button onClick={() => process(t('voice.cmd.routine'))} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-700 shadow-card">🕰️ {t('voice.suggest.routine')}</button>
-          <button onClick={() => process(t('voice.cmd.reminders'))} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-700 shadow-card">🔔 {t('voice.suggest.reminders')}</button>
-          <button onClick={() => process(t('voice.cmd.next'))} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-700 shadow-card">📅 {t('voice.suggest.next')}</button>
-          <button onClick={() => process(t('voice.cmd.home'))} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-700 shadow-card">🏠 {t('voice.suggest.gohome')}</button>
+        <div className="mt-1 flex flex-wrap justify-center gap-2">
+          <button onClick={() => process(t('voice.cmd.memory'))} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-base font-bold text-brand-700 shadow-card transition-all hover:bg-brand-50 hover:shadow-md"><GamesIcon size={16} /> {t('voice.suggest.startGame')}</button>
+          <button onClick={() => process(t('voice.cmd.routine'))} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-base font-bold text-brand-700 shadow-card transition-all hover:bg-brand-50 hover:shadow-md"><ClockIcon size={16} /> {t('voice.suggest.routine')}</button>
+          <button onClick={() => process(t('voice.cmd.reminders'))} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-base font-bold text-warm-700 shadow-card transition-all hover:bg-warm-50 hover:shadow-md"><BellIcon size={16} /> {t('voice.suggest.reminders')}</button>
+          <button onClick={() => process(t('voice.cmd.next'))} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-base font-bold text-info-600 shadow-card transition-all hover:bg-info-50 hover:shadow-md"><CalendarIcon size={16} /> {t('voice.suggest.next')}</button>
+          <button onClick={() => process(t('voice.cmd.home'))} className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-base font-bold text-neutral-600 shadow-card transition-all hover:bg-neutral-50 hover:shadow-md"><HomeIcon size={16} /> {t('voice.suggest.gohome')}</button>
         </div>
       </div>
     </div>
