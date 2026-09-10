@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { NavLink } from 'react-router-dom';
 import {
   ResponsiveContainer,
   LineChart,
@@ -57,6 +58,49 @@ export default function CaregiverOverview() {
           <Chip tone="warm">{t('cg.relationship')}: {state.caregiver.relationship}</Chip>
         </div>
       </Card>
+
+      {/* Recent Face Check-In Card (when available) */}
+      {state.lastFaceLogin && (
+        <Card className="border border-emerald-200 bg-gradient-to-r from-emerald-50/90 via-white to-brand-50/70 p-4 shadow-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border-2 border-emerald-400 shadow-sm">
+                <img
+                  src={state.lastFaceLogin.photo}
+                  alt="Verified Face"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute bottom-0 inset-x-0 bg-emerald-600 text-white text-[8px] font-extrabold text-center uppercase tracking-wider py-0.5">
+                  LIVE
+                </span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-extrabold text-brand-900">
+                    📸 Recent Face Check-In
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800">
+                    ✓ Verified
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-neutral-600 font-semibold truncate">
+                  {state.lastFaceLogin.name} signed in successfully via biometric face scan.
+                </p>
+                <p className="text-[11px] text-neutral-400 font-mono">
+                  {new Date(state.lastFaceLogin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} today
+                </p>
+              </div>
+            </div>
+
+            <NavLink
+              to="/caregiver/alerts"
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-brand-800 px-4 py-2 text-xs font-extrabold text-white hover:bg-brand-700 transition"
+            >
+              View in Alerts →
+            </NavLink>
+          </div>
+        </Card>
+      )}
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">

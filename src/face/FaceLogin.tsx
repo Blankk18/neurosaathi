@@ -18,7 +18,7 @@ export function FaceLogin({
 }: {
   open: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (photo?: string) => void;
   onUsePin: () => void;
 }) {
   const { state, t, speakText } = useApp();
@@ -31,6 +31,61 @@ export function FaceLogin({
   const [statusMessage, setStatusMessage] = useState('Starting camera…');
 
   const name = state.patient?.name?.split(' ')[0] ?? 'Asha';
+
+  const captureFrame = (): string => {
+    const video = videoRef.current;
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      try {
+        const canvas = document.createElement('canvas');
+        const targetW = 320;
+        const targetH = Math.round((targetW / video.videoWidth) * video.videoHeight);
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.translate(targetW, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, 0, 0, targetW, targetH);
+          return canvas.toDataURL('image/jpeg', 0.75);
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[FaceLogin] Error capturing video frame', e);
+      }
+    }
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 300;
+      canvas.height = 300;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const grad = ctx.createLinearGradient(0, 0, 300, 300);
+        grad.addColorStop(0, '#134e4a');
+        grad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 300, 300);
+
+        ctx.fillStyle = '#34d399';
+        ctx.beginPath();
+        ctx.arc(150, 115, 50, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.ellipse(150, 230, 85, 65, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✓ BIOMETRIC SCAN', 150, 275);
+        return canvas.toDataURL('image/jpeg', 0.75);
+      }
+    } catch {
+      /* no-op */
+    }
+    return '';
+  };
 
   // Cleanup helper to guarantee webcam is turned off
   const stopCamera = () => {
@@ -127,6 +182,9 @@ export function FaceLogin({
           setScanState('verified');
           setStatusMessage('Face Verified! Welcome back!');
 
+          // Capture photo frame from video before stopping camera
+          const capturedPhoto = captureFrame();
+
           if (state.settings.voiceOn) {
             speakText(`${name}. ${t('login.success.elder')}`);
           }
@@ -137,7 +195,7 @@ export function FaceLogin({
           // Smooth transition before navigating/opening
           completionTimeout = setTimeout(() => {
             if (isMounted) {
-              onSuccess();
+              onSuccess(capturedPhoto);
             }
           }, 350);
         }

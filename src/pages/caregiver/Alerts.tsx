@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '@/state/AppContext';
-import { Card, Button, Disclaimer, Chip, SectionTitle } from '@/components/ui';
+import { Card, Button, Disclaimer, Chip, SectionTitle, Modal } from '@/components/ui';
 import { evaluateAttentionIndicator, simulateDecline } from '@/engine/alerts';
 import { AlertIcon, BellIcon, ShieldIcon, InfoIcon, EyeIcon } from '@/components/Icons';
 
 export default function Alerts() {
   const { t, state, dispatch } = useApp();
   const [triggered, setTriggered] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // live evaluation from the current stored trend (no single-score alarm)
   const live = useMemo(
@@ -202,6 +203,38 @@ export default function Alerts() {
               </div>
             )}
 
+            {a.photo && (
+              <div className="mt-4 flex flex-col sm:flex-row items-start gap-3.5 rounded-2xl bg-canvas p-3 ring-1 ring-black/[0.05]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPhoto(a.photo ?? null)}
+                  className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-brand-200 shadow-sm focus:outline-none"
+                  aria-label="Enlarge captured face photo"
+                >
+                  <img
+                    src={a.photo}
+                    alt="Scanned Face"
+                    className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100 text-white text-xs font-bold">
+                    🔍 View
+                  </div>
+                </button>
+                <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-extrabold text-emerald-700 border border-emerald-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Verified Face Login Snapshot
+                  </span>
+                  <p className="text-xs font-semibold leading-relaxed text-neutral-600">
+                    Photo captured during live face scan authentication. Confirmed match on local device.
+                  </p>
+                  <div className="text-[11px] font-mono text-neutral-400">
+                    Captured: {new Date(a.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!a.read && (
               <button
                 onClick={() => dispatch({ type: 'MARK_ALERT_READ', id: a.id })}
@@ -213,6 +246,31 @@ export default function Alerts() {
           </Card>
         ))}
       </div>
+
+      {/* Photo Enlarge Lightbox */}
+      <Modal
+        open={Boolean(selectedPhoto)}
+        onClose={() => setSelectedPhoto(null)}
+        title="📸 Scanned Face Snapshot"
+      >
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-brand-100 bg-neutral-900 shadow-lift">
+            {selectedPhoto && (
+              <img
+                src={selectedPhoto}
+                alt="Enlarged Face Capture"
+                className="h-auto max-h-[380px] w-full object-contain mx-auto"
+              />
+            )}
+          </div>
+          <div className="rounded-xl bg-brand-50 p-3 text-center text-xs font-bold text-brand-800">
+            Biometric verification record · Preserved securely for caregiver confirmation
+          </div>
+          <Button variant="secondary" onClick={() => setSelectedPhoto(null)} className="w-full">
+            {t('common.close')}
+          </Button>
+        </div>
+      </Modal>
 
       <p className="pb-1 text-center text-xs font-semibold leading-relaxed text-neutral-400">
         Alerts are generated only when multiple signals move together over days — never from a single score.

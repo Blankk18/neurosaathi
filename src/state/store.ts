@@ -1,8 +1,10 @@
 import type {
+  Alert,
   AppState,
   Caregiver,
   CognitiveProfile,
   EmergencyContact,
+  FaceLoginRecord,
   FamilyMemory,
   GameResult,
   GuardianState,
@@ -42,6 +44,7 @@ export type Action =
   | { type: 'SET_DEMO'; step?: number; active?: boolean; completed?: boolean }
   | { type: 'ADD_RESULTS'; results: GameResult[] }
   | { type: 'CLEAR_ALERTS' }
+  | { type: 'RECORD_FACE_LOGIN'; record: FaceLoginRecord }
 
   // ---- GUARDIAN (location safety) ----
   | { type: 'GUARDIAN_UPDATE'; current: LocationUpdate; trail: LocationUpdate[]; status: RiskLevel; statusSince: string; currentZoneId: string | null }
@@ -235,6 +238,41 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'CLEAR_ALERTS':
       return { ...state, alerts: [] };
+
+    case 'RECORD_FACE_LOGIN': {
+      const now = new Date();
+      const timeStr = todayTimelineTime();
+      const patientName = action.record.name || state.patient?.name || 'Asha Sharma';
+      const newAlert: Alert = {
+        id: uid('alert'),
+        patientId: state.patient?.id ?? DEMO_PATIENT_ID,
+        severity: 'attention',
+        title: '📸 Elder Face Check-In',
+        message: `${patientName} logged in via Face Recognition at ${timeStr}. Photo captured & verified.`,
+        reasons: ['Biometric face match verified', `Login time: ${timeStr} today`],
+        createdAt: action.record.timestamp || now.toISOString(),
+        read: false,
+        photo: action.record.photo,
+        kind: 'face_login',
+      };
+
+      const timelineEv: TimelineEvent = {
+        id: uid('tl'),
+        patientId: state.patient?.id ?? DEMO_PATIENT_ID,
+        time: timeStr,
+        label: `Face Check-in: ${patientName}`,
+        icon: '📸',
+        kind: 'activity',
+        photo: action.record.photo,
+      };
+
+      return {
+        ...state,
+        lastFaceLogin: action.record,
+        alerts: [newAlert, ...state.alerts].slice(0, 30),
+        timeline: [timelineEv, ...state.timeline].slice(0, 100),
+      };
+    }
 
     case 'ADD_TIMELINE_EVENT':
       return { ...state, timeline: [action.event, ...state.timeline].slice(0, 200) };

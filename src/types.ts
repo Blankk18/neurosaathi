@@ -250,6 +250,8 @@ export interface Alert {
   createdAt: string;
   read: boolean;
   simulated?: boolean;
+  photo?: string;
+  kind?: string;
 }
 
 export interface SyncRecord {
@@ -268,6 +270,14 @@ export interface TimelineEvent {
   label: string;
   icon: string; // emoji
   kind: 'reminder' | 'game' | 'mood' | 'activity';
+  photo?: string;
+}
+
+export interface FaceLoginRecord {
+  photo: string;
+  timestamp: string;
+  role: Role;
+  name: string;
 }
 
 export interface Settings {
@@ -306,6 +316,7 @@ export interface AppState {
   guardian: GuardianState;
   /** Caregiver-configured emergency contacts. */
   emergencyContacts: EmergencyContact[];
+  lastFaceLogin?: FaceLoginRecord;
   offlineSince?: string;
   lastSynced?: string;
   demo: DemoState;

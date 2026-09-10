@@ -154,9 +154,24 @@ export default function Login() {
     setFocus(r);
   };
 
-  // Face Login success → authenticate the role (elder or caregiver)
-  const handleFaceSuccess = () => {
+  // Face Login success → authenticate role & store photo in caregiver notification
+  const handleFaceSuccess = (photo?: string) => {
     const r = faceRole;
+    const patientName = state.patient?.name || t('login.patient.name');
+    const now = new Date();
+
+    if (photo) {
+      dispatch({
+        type: 'RECORD_FACE_LOGIN',
+        record: {
+          photo,
+          timestamp: now.toISOString(),
+          role: r,
+          name: patientName,
+        },
+      });
+    }
+
     const msg = r === 'elder' ? t('login.success.elder') : t('login.success.caregiver');
     speakText(`${t('login.patient.name')}. ${msg}`);
     dispatch({ type: 'SET_ROLE', role: r });

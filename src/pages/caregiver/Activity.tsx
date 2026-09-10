@@ -34,9 +34,17 @@ export default function Activity() {
                     >
                       {ev.icon}
                     </span>
-                    <div className="flex min-w-0 flex-1 items-center justify-between gap-2 border-b border-brand-100 py-3 last:border-0">
-                      <span className="text-base font-bold text-brand-900">{ev.label}</span>
-                      <span className="chip bg-warm-100 text-warm-600">{ev.time}</span>
+                    <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-100 py-3 last:border-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-base font-bold text-brand-900">{ev.label}</span>
+                        {ev.photo && (
+                          <span className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50/80 p-1">
+                            <img src={ev.photo} alt="Snapshot" className="h-9 w-9 rounded-lg object-cover" />
+                            <span className="text-[11px] font-bold text-brand-700 pr-1">📸 Photo Verified</span>
+                          </span>
+                        )}
+                      </div>
+                      <span className="chip bg-warm-100 text-warm-600 self-start sm:self-auto">{ev.time}</span>
                     </div>
                   </li>
                 );
