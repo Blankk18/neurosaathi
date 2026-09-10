@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
-import { HomeIcon, GamesIcon, BellIcon, HeartsIcon, ChartIcon, GridIcon, UserIcon, LightbulbIcon, AlertIcon, SpeakerIcon, StopIcon, ShieldIcon } from './Icons';
+import { HomeIcon, GamesIcon, BellIcon, HeartsIcon, ChartIcon, GridIcon, UserIcon, LightbulbIcon, AlertIcon, SpeakerIcon, StopIcon, ShieldIcon, CameraIcon } from './Icons';
 import { AccessibilityControls, LanguageSelector, OfflineBadge } from './common';
 import { Modal, Toast } from './ui';
 
@@ -173,6 +173,7 @@ const CAREGIVER_NAV = [
   { to: '/caregiver/patients', label: 'cg.patients', Icon: UserIcon },
   { to: '/caregiver/insights', label: 'cg.insights', Icon: LightbulbIcon },
   { to: '/caregiver/memories', label: 'cg.familyMemories', Icon: HeartsIcon },
+  { to: '/caregiver/face-recognition', label: 'cg.faceRecognition', Icon: CameraIcon },
   { to: '/caregiver/location', label: 'guardian.cg.nav', Icon: ShieldIcon },
   { to: '/caregiver/alerts', label: 'cg.alerts', Icon: AlertIcon },
   { to: '/caregiver/activity', label: 'cg.activity', Icon: ClockNavIcon },
@@ -185,6 +186,8 @@ const CAREGIVER_PAGE_SPEECH: Record<string, string> = {
   '/caregiver/patients': 'cg.patients',
   '/caregiver/insights': 'cg.insights',
   '/caregiver/memories': 'cg.familyMemories',
+  '/caregiver/face-recognition': 'cg.faceRecognition',
+  '/caregiver/face-scans': 'cg.faceRecognition',
   '/caregiver/location': 'guardian.title',
   '/caregiver/alerts': 'cg.alerts',
   '/caregiver/activity': 'cg.activity',

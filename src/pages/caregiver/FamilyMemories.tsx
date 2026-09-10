@@ -14,6 +14,9 @@ import {
   CalendarIcon,
   LightbulbIcon,
 } from '@/components/Icons';
+import { ElderSelector } from '@/components/caregiver/ElderSelector';
+import { memoryService } from '@/services/memoryService';
+import type { DbElderProfile } from '@/types/database';
 
 function initials(name: string): string {
   return name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
@@ -23,12 +26,16 @@ function initials(name: string): string {
 // CAREGIVER — FAMILY MEMORY MANAGER.
 //
 // The caregiver OWNS add / edit / delete of family memories (the elder view is
-// read-only). Edited memories flow straight into the shared store, so they also
-// feed the Family Memory Challenge and the elder's album.
+// read-only). Memories are stored in Supabase PostgreSQL + Supabase Storage,
+// and synced cross-device so all family members and elders see them.
 // ============================================================================
 export default function FamilyMemories() {
   const { t, state, dispatch } = useApp();
-  const family = state.familyMemories;
+  const [selectedElder, setSelectedElder] = useState<DbElderProfile | null>(null);
+  const activeElderId = selectedElder?.id || state.patient?.id || 'e0000000-0000-0000-0000-000000000001';
+  const elderName = selectedElder?.name || state.patient?.name || 'Asha Sharma';
+
+  const [memoriesList, setMemoriesList] = useState<FamilyMemory[]>(state.familyMemories);
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<FamilyMemory | null>(null);
   const [name, setName] = useState('');
@@ -40,20 +47,39 @@ export default function FamilyMemories() {
   const [preview, setPreview] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Record<string, string | null>>({});
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const loadAll = async () => {
-    const map: Record<string, string | null> = {};
-    for (const f of family) {
-      const blob = await loadImage(`fam-${f.id}`);
-      if (blob) map[f.id] = URL.createObjectURL(blob);
+    try {
+      const remote = await memoryService.getMemories(activeElderId);
+      const list = remote.length > 0 ? remote : state.familyMemories;
+      setMemoriesList(list);
+
+      const map: Record<string, string | null> = {};
+      for (const f of list) {
+        if (f.photo) {
+          map[f.id] = f.photo;
+        } else {
+          const blob = await loadImage(`fam-${f.id}`);
+          if (blob) map[f.id] = URL.createObjectURL(blob);
+        }
+      }
+      setPhotos(map);
+    } catch {
+      setMemoriesList(state.familyMemories);
     }
-    setPhotos(map);
   };
 
   useEffect(() => {
-    loadAll();
+    void loadAll();
+    const unsubscribe = memoryService.subscribeToMemories(activeElderId, () => {
+      void loadAll();
+    });
+    return () => {
+      unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family.length]);
+  }, [activeElderId, state.familyMemories.length]);
 
   const openAdd = () => {
     setEditing(null);
@@ -76,7 +102,7 @@ export default function FamilyMemories() {
     setBirthday(f.birthday ?? '');
     setNotes(f.notes);
     setFile(null);
-    setPreview(null);
+    setPreview(photos[f.id] || null);
     setError('');
     setModal(true);
   };
@@ -95,28 +121,73 @@ export default function FamilyMemories() {
       setError(t('err.missing'));
       return;
     }
-    const id = editing?.id ?? uid('fam');
-    const memory: FamilyMemory = {
-      id,
-      patientId: state.patient?.id ?? 'patient-asha',
-      name: name.trim(),
-      relationship: relationship.trim(),
-      info: info.trim() || t('family.info.fallback'),
-      birthday: birthday.trim() || undefined,
-      notes: notes.trim(),
-      createdAt: editing?.createdAt ?? new Date().toISOString(),
-    };
-    if (file) {
-      const ok = await saveImage(`fam-${id}`, file);
-      if (!ok) setError(t('err.upload'));
+    setSaving(true);
+    try {
+      const id = editing?.id ?? uid('fam');
+      let uploadedUrl: string | undefined = undefined;
+
+      // Save to Supabase Storage + Database
+      if (editing) {
+        await memoryService.updateMemory(
+          editing.id,
+          activeElderId,
+          {
+            title: name.trim(),
+            person: name.trim(),
+            relationship: relationship.trim(),
+            description: info.trim(),
+            notes: notes.trim(),
+          },
+          file
+        );
+      } else {
+        const created = await memoryService.addMemory(
+          activeElderId,
+          {
+            title: name.trim(),
+            person: name.trim(),
+            relationship: relationship.trim(),
+            description: info.trim(),
+            notes: notes.trim(),
+          },
+          file
+        );
+        if (created?.photo) {
+          uploadedUrl = created.photo;
+        }
+      }
+
+      // Also cache locally for offline durability
+      if (file) {
+        await saveImage(`fam-${id}`, file);
+      }
+
+      const memory: FamilyMemory = {
+        id,
+        patientId: activeElderId,
+        name: name.trim(),
+        relationship: relationship.trim(),
+        info: info.trim() || t('family.info.fallback'),
+        birthday: birthday.trim() || undefined,
+        notes: notes.trim(),
+        photo: uploadedUrl || preview || undefined,
+        createdAt: editing?.createdAt ?? new Date().toISOString(),
+      };
+
+      dispatch({ type: editing ? 'UPDATE_FAMILY_MEMORY' : 'ADD_FAMILY_MEMORY', memory });
+      setModal(false);
+      await loadAll();
+    } catch (err: any) {
+      setError(err?.message || t('err.upload'));
+    } finally {
+      setSaving(false);
     }
-    dispatch({ type: editing ? 'UPDATE_FAMILY_MEMORY' : 'ADD_FAMILY_MEMORY', memory });
-    setModal(false);
-    loadAll();
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
+    await memoryService.deleteMemory(id);
     dispatch({ type: 'REMOVE_FAMILY_MEMORY', id });
+    await loadAll();
   };
 
   return (
@@ -134,8 +205,16 @@ export default function FamilyMemories() {
         }
       />
 
-      <p className="mt-1 max-w-2xl text-base font-semibold leading-relaxed text-brand-700/80">
-        You manage the family memories the elder sees. Add, edit or remove people — they become the Family Memory Challenge and the elder’s album.
+      {/* Multi-Elder Selector */}
+      <div className="mt-3 rounded-3xl bg-white p-3 shadow-card">
+        <ElderSelector
+          selectedElderId={activeElderId}
+          onSelectElder={setSelectedElder}
+        />
+      </div>
+
+      <p className="mt-3 max-w-2xl text-base font-semibold leading-relaxed text-brand-700/80">
+        You manage the family memories for <b>{elderName}</b>. Add, edit or remove people — memories are saved to Supabase Cloud and sync cross-device for the elder’s album and games.
       </p>
 
       {/* Manager header — count + soft description */}
@@ -148,7 +227,7 @@ export default function FamilyMemories() {
             <div>
               <div className="text-xs font-extrabold uppercase tracking-widest text-brand-600">Family Memory Manager</div>
               <div className="text-lg font-extrabold text-brand-900">
-                {family.length} {family.length === 1 ? 'person' : 'people'} remembered
+                {memoriesList.length} {memoriesList.length === 1 ? 'person' : 'people'} remembered
               </div>
             </div>
           </div>
@@ -162,12 +241,12 @@ export default function FamilyMemories() {
         </div>
         <div className="mt-4 h-px w-full bg-brand-50" />
         <p className="mt-3 text-sm font-semibold leading-relaxed text-neutral-600">
-          Photos are stored on this device and appear in Family Memories games — a calm, familiar way to practice recall.
+          ☁️ Photos are stored securely in Supabase Storage bucket <code>family-memories</code> and cached locally for offline recall.
         </p>
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {family.map((f, idx) => {
+        {memoriesList.map((f, idx) => {
           const photo = photos[f.id];
           return (
             <Card key={f.id} className="group flex flex-col overflow-hidden p-0 fade-up">
@@ -238,7 +317,7 @@ export default function FamilyMemories() {
         })}
       </div>
 
-      {family.length === 0 && (
+      {memoriesList.length === 0 && (
         <Card className="mt-5 flex flex-col items-center gap-3 py-10 text-center">
           <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
             <UsersIcon size={28} />
@@ -339,8 +418,8 @@ export default function FamilyMemories() {
 
           {error && <p className="rounded-2xl bg-danger-50 px-4 py-3 text-base font-bold text-danger-600">{error}</p>}
 
-          <Button variant="huge" onClick={save} className="!py-4">
-            ✅ {t('common.save')}
+          <Button variant="huge" onClick={save} disabled={saving} className="!py-4">
+            {saving ? '⏳ Saving to Supabase Cloud…' : `✅ ${t('common.save')}`}
           </Button>
         </div>
       </Modal>

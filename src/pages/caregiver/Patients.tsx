@@ -1,7 +1,11 @@
+import { useState, useEffect } from 'react';
 import { useApp } from '@/state/AppContext';
 import { Card, Chip, SectionTitle, StatTile, Disclaimer } from '@/components/ui';
 import { difficultyLabel } from '@/engine/adaptive';
 import { BrainIcon, TargetIcon, ClockIcon, HeartIcon } from '@/components/Icons';
+import { ElderSelector } from '@/components/caregiver/ElderSelector';
+import { gameService } from '@/services/gameService';
+import type { DbElderProfile, DbGameSession } from '@/types/database';
 
 const GAME_TITLE: Record<string, string> = {
   'memory-match': 'games.memory',
@@ -14,14 +18,40 @@ const GAME_TITLE: Record<string, string> = {
 
 export default function Patients() {
   const { t, state } = useApp();
-  const patient = state.patient;
+  const [selectedElder, setSelectedElder] = useState<DbElderProfile | null>(null);
+  const activeElderId = selectedElder?.id || state.patient?.id || 'e0000000-0000-0000-0000-000000000001';
+  const elderName = selectedElder?.name || state.patient?.name || 'Asha Sharma';
+  const [dbSessions, setDbSessions] = useState<DbGameSession[]>([]);
 
-  const recentSessions = [...state.gameResults]
-    .sort((a, b) => b.playedAt.localeCompare(a.playedAt))
-    .slice(0, 8);
+  useEffect(() => {
+    gameService.getSessions(activeElderId, 15).then((sessions) => {
+      setDbSessions(sessions);
+    });
+  }, [activeElderId]);
+
+  const recentSessions = dbSessions.length > 0
+    ? dbSessions.map((s) => ({
+        id: s.id,
+        game: s.game_type as any,
+        accuracy: s.accuracy,
+        responseTimeSec: s.average_response_time,
+        mistakes: s.mistakes,
+        nextDifficulty: s.difficulty as any,
+        playedAt: s.completed_at,
+      }))
+    : [...state.gameResults]
+        .sort((a, b) => b.playedAt.localeCompare(a.playedAt))
+        .slice(0, 8);
 
   return (
     <div className="fade-in">
+      {/* Multi-Elder Selector bar */}
+      <div className="mb-5 rounded-3xl bg-white p-3 shadow-card">
+        <ElderSelector
+          selectedElderId={activeElderId}
+          onSelectElder={setSelectedElder}
+        />
+      </div>
       {/* patient identity hero */}
       <Card className="mb-5 overflow-hidden p-0 ring-1 ring-black/[0.04]">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 px-6 py-6 text-white sm:px-8 sm:py-7">
@@ -29,22 +59,22 @@ export default function Patients() {
           <div aria-hidden className="pointer-events-none absolute -bottom-28 right-32 h-48 w-48 rounded-full bg-warm-300/25" />
           <div className="relative flex flex-wrap items-center gap-5">
             <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/15 text-4xl font-extrabold text-white ring-2 ring-white/25">
-              {patient?.name?.[0]}
+              {elderName[0]}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-3xl font-extrabold leading-tight">{patient?.name}</div>
+              <div className="text-3xl font-extrabold leading-tight">{elderName}</div>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-brand-100">
                 <span className="inline-flex items-center gap-1.5">
-                  <ClockIcon size={15} /> {t('cg.age')}: {patient?.age}
+                  <ClockIcon size={15} /> {t('cg.age')}: {selectedElder?.age ?? state.patient?.age ?? 68}
                 </span>
                 <span className="opacity-50" aria-hidden>·</span>
                 <span className="inline-flex items-center gap-1.5">
                   <HeartIcon size={15} /> {t('onboard.caregiver')}:{' '}
-                  <b className="text-white">{patient?.caregiverName}</b> ({patient?.caregiverRelationship})
+                  <b className="text-white">{state.caregiver?.name || 'Priya Sharma'}</b> ({state.caregiver?.relationship || 'Daughter'})
                 </span>
               </div>
               <div className="mt-1 text-sm font-semibold text-brand-100/90">
-                💫 {t('cg.patients.interests')}: {patient?.interests?.join(', ')}
+                💫 {t('cg.patients.interests')}: {(selectedElder?.interests || state.patient?.interests || ['Music', 'Gardening']).join(', ')}
               </div>
             </div>
             <div className="shrink-0">
@@ -55,8 +85,10 @@ export default function Patients() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 px-6 py-4 sm:px-8">
-          <Chip tone="brand">{t('cg.language')}: {patient?.language?.toUpperCase()}</Chip>
-          <Chip tone="warm">{t('cg.region')}: {patient?.region}</Chip>
+          <Chip tone="brand">
+            {t('cg.language')}: {(selectedElder?.preferred_language || state.patient?.language || 'hi').toUpperCase()}
+          </Chip>
+          <Chip tone="warm">{t('cg.region')}: {selectedElder?.region ?? state.patient?.region ?? 'assam'}</Chip>
         </div>
       </Card>
 

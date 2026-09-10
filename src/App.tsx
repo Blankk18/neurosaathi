@@ -28,6 +28,8 @@ import FamilyMemories from '@/pages/caregiver/FamilyMemories';
 import Alerts from '@/pages/caregiver/Alerts';
 import Activity from '@/pages/caregiver/Activity';
 import Settings from '@/pages/caregiver/Settings';
+import FaceRecognition from '@/pages/caregiver/FaceRecognition';
+import FaceScanHistory from '@/pages/caregiver/FaceScanHistory';
 import Privacy from '@/pages/system/Privacy';
 import Architecture from '@/pages/system/Architecture';
 import DemoMode from '@/pages/system/DemoMode';
@@ -293,6 +295,30 @@ export default function App() {
           ) : (
             <CaregiverShell>
               <Guardian />
+            </CaregiverShell>
+          )
+        }
+      />
+      <Route
+        path="/caregiver/face-recognition"
+        element={
+          isElder(state) ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <CaregiverShell>
+              <FaceRecognition />
+            </CaregiverShell>
+          )
+        }
+      />
+      <Route
+        path="/caregiver/face-scans"
+        element={
+          isElder(state) ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <CaregiverShell>
+              <FaceScanHistory />
             </CaregiverShell>
           )
         }

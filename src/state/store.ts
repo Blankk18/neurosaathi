@@ -194,9 +194,11 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'ADD_FAMILY_MEMORY':
+      if (state.currentRole !== 'caregiver') return state;
       return { ...state, familyMemories: [...state.familyMemories, action.memory] };
 
     case 'UPDATE_FAMILY_MEMORY': {
+      if (state.currentRole !== 'caregiver') return state;
       const list = state.familyMemories.map((m) =>
         m.id === action.memory.id ? action.memory : m,
       );
@@ -204,6 +206,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'REMOVE_FAMILY_MEMORY':
+      if (state.currentRole !== 'caregiver') return state;
       return { ...state, familyMemories: state.familyMemories.filter((m) => m.id !== action.id) };
 
     case 'ADD_MOOD': {

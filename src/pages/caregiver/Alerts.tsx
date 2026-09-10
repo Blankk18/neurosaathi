@@ -1,13 +1,54 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useApp } from '@/state/AppContext';
 import { Card, Button, Disclaimer, Chip, SectionTitle, Modal } from '@/components/ui';
 import { evaluateAttentionIndicator, simulateDecline } from '@/engine/alerts';
 import { AlertIcon, BellIcon, ShieldIcon, InfoIcon, EyeIcon } from '@/components/Icons';
+import { faceApi } from '@/services/faceApi';
+import { ElderSelector } from '@/components/caregiver/ElderSelector';
+import { alertService } from '@/services/alertService';
+import type { DbElderProfile, DbAlert } from '@/types/database';
 
 export default function Alerts() {
   const { t, state, dispatch } = useApp();
+  const [selectedElder, setSelectedElder] = useState<DbElderProfile | null>(null);
+  const activeElderId = selectedElder?.id || state.patient?.id || 'e0000000-0000-0000-0000-000000000001';
+  const elderName = selectedElder?.name || state.patient?.name || 'Asha Sharma';
+
   const [triggered, setTriggered] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [dbAlerts, setDbAlerts] = useState<DbAlert[]>([]);
+
+  // Synchronize server-side face login scan photos (so another device can see them)
+  useEffect(() => {
+    faceApi
+      .getScanHistory(activeElderId, 20)
+      .then((res) => {
+        const matchedWithPhotos = (res.events || []).filter(
+          (e) => e.result === 'MATCHED' && e.photo
+        );
+        for (const ev of matchedWithPhotos) {
+          const alreadyExists = state.alerts.some(
+            (a) => a.kind === 'face_login' && (a.createdAt === ev.timestamp || a.photo === ev.photo)
+          );
+          if (!alreadyExists && ev.photo) {
+            dispatch({
+              type: 'RECORD_FACE_LOGIN',
+              record: {
+                photo: ev.photo,
+                timestamp: ev.timestamp,
+                role: 'elder',
+                name: elderName,
+              },
+            });
+          }
+        }
+      })
+      .catch(() => null);
+
+    alertService.getAlerts(activeElderId, 20).then((res) => {
+      setDbAlerts(res);
+    });
+  }, [activeElderId, elderName, state.alerts, dispatch]);
 
   // live evaluation from the current stored trend (no single-score alarm)
   const live = useMemo(
@@ -22,12 +63,31 @@ export default function Alerts() {
     if (evalResult.alert) dispatch({ type: 'ADD_ALERT', alert: evalResult.alert });
     setTriggered(true);
   };
-
-  const alerts = state.alerts;
-  const visible = alerts.filter((a) => a.severity === 'attention').slice(0, 8);
+  const mappedDbAlerts = dbAlerts.map((a) => ({
+    id: a.id,
+    patientId: a.elder_id,
+    severity: a.severity,
+    title: a.type,
+    message: a.message,
+    reasons: a.reasons || [],
+    createdAt: a.created_at,
+    kind: a.type.toLowerCase() as any,
+    photo: a.photo || undefined,
+    read: a.status === 'reviewed',
+  }));
+  const allAlerts = [...state.alerts, ...mappedDbAlerts.filter((d) => !state.alerts.some((s) => s.id === d.id))];
+  const visible = allAlerts.filter((a) => a.severity === 'attention').slice(0, 15);
 
   return (
     <div className="mx-auto max-w-[780px] space-y-5 fade-in">
+      {/* Multi-Elder Selector */}
+      <div className="rounded-3xl bg-white p-3 shadow-card">
+        <ElderSelector
+          selectedElderId={activeElderId}
+          onSelectElder={setSelectedElder}
+        />
+      </div>
+
       {/* non-diagnostic reassurance — must stay verbatim */}
       <Disclaimer>{t('cg.attention.notdiagnosis')}</Disclaimer>
 

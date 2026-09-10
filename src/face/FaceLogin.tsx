@@ -1,14 +1,21 @@
 // ============================================================================
-// FACE LOGIN — Fast, frictionless face scan authentication via live camera.
+// FACE LOGIN — Live Biometric Scan Authentication via Camera
 //
-// Automatically initiates camera upon opening, performs a 2-second biometric
-// face scan with real-time HUD visuals and progress bar, then unlocks and
-// directs the user straight into the app. Always releases camera cleanly.
+// Automatically connects to live camera, analyzes facial landmarks & 128-dim
+// descriptors using @vladmandic/face-api, computes Euclidean distance against
+// enrolled profile, gates on 3 consecutive matches, and logs authoritative
+// scan events to the backend.
 // ============================================================================
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useApp } from '@/state/AppContext';
 import { Modal } from '@/components/ui';
+import { LiveFaceScanner } from './LiveFaceScanner';
+import { useFaceRecognition } from './useFaceRecognition';
+import { loadFaceProfile, saveFaceProfile } from './faceRecognition.service';
+import { faceApi } from '@/services/faceApi';
+import { FaceEnrollment } from './FaceEnrollment';
+import type { FaceProfile } from './types';
 
 export function FaceLogin({
   open,
@@ -22,18 +29,51 @@ export function FaceLogin({
   onUsePin: () => void;
 }) {
   const { state, t, speakText } = useApp();
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [profile, setProfile] = useState<FaceProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [showEnrollment, setShowEnrollment] = useState(false);
+  const [verified, setVerified] = useState(false);
 
-  const [scanState, setScanState] = useState<'starting' | 'scanning' | 'verified'>('starting');
-  const [progress, setProgress] = useState(0);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('Starting camera…');
+  const sessionIdRef = useRef<string>('');
+  const hasLoggedRef = useRef(false);
 
+  const userId = state.patient?.id || 'patient-1';
   const name = state.patient?.name?.split(' ')[0] ?? 'Asha';
 
+  // Fetch enrolled face profile (first check local IndexedDB, fallback to server)
+  const fetchProfile = useCallback(async () => {
+    setLoadingProfile(true);
+    try {
+      let prof = await loadFaceProfile();
+      if (!prof || !prof.enrolled || prof.samples.length === 0) {
+        const serverProf = await faceApi.getProfileForLogin(userId);
+        if (serverProf && serverProf.enrolled && serverProf.samples.length > 0) {
+          prof = {
+            version: 1,
+            enrolled: true,
+            samples: serverProf.samples.map((s) => ({
+              descriptor: s,
+              capturedAt: Date.now(),
+            })),
+            enrolledAt: Date.now(),
+            patientId: userId,
+          };
+          await saveFaceProfile(prof);
+        }
+      }
+      setProfile(prof);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[FaceLogin] Error loading face profile:', err);
+      setProfile(null);
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, [userId]);
+
+  // Capture a snapshot frame for local caregiver notification display
   const captureFrame = (): string => {
-    const video = videoRef.current;
+    const video = face.videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       try {
         const canvas = document.createElement('canvas');
@@ -43,314 +83,238 @@ export function FaceLogin({
         canvas.height = targetH;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.translate(targetW, 0);
-          ctx.scale(-1, 1);
           ctx.drawImage(video, 0, 0, targetW, targetH);
-          return canvas.toDataURL('image/jpeg', 0.75);
+          return canvas.toDataURL('image/jpeg', 0.8);
         }
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.warn('[FaceLogin] Error capturing video frame', e);
+        console.warn('[FaceLogin] Frame capture error:', e);
       }
-    }
-
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 300;
-      canvas.height = 300;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const grad = ctx.createLinearGradient(0, 0, 300, 300);
-        grad.addColorStop(0, '#134e4a');
-        grad.addColorStop(1, '#0f172a');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 300, 300);
-
-        ctx.fillStyle = '#34d399';
-        ctx.beginPath();
-        ctx.arc(150, 115, 50, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.ellipse(150, 230, 85, 65, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 15px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('✓ BIOMETRIC SCAN', 150, 275);
-        return canvas.toDataURL('image/jpeg', 0.75);
-      }
-    } catch {
-      /* no-op */
     }
     return '';
   };
 
-  // Cleanup helper to guarantee webcam is turned off
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        try {
-          track.stop();
-        } catch {
-          /* no-op */
-        }
-      });
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-  };
+  // Called when 3 consecutive matches are verified by useFaceRecognition
+  const handleMatch = useCallback(async () => {
+    if (hasLoggedRef.current) return;
+    hasLoggedRef.current = true;
+    setVerified(true);
 
+    const photo = captureFrame();
+
+    // Log authoritative MATCHED scan event to the backend
+    try {
+      await faceApi.recordScan({
+        userId,
+        result: 'MATCHED',
+        faceDistance: face.lastDistance ?? 0.35,
+        deviceSessionId: sessionIdRef.current,
+        photo: photo || null,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[FaceLogin] Server scan record notice:', err);
+    }
+
+    if (state.settings.voiceOn) {
+      speakText(`${name}. ${t('login.success.elder')}`);
+    }
+
+    // Short transition before redirect
+    setTimeout(() => {
+      onSuccess(photo);
+    }, 400);
+  }, [userId, name, state.settings.voiceOn, speakText, t, onSuccess]);
+
+  const face = useFaceRecognition({
+    profile,
+    onMatch: handleMatch,
+  });
+
+  // Log scan failure if max attempts reached or explicitly not recognized
+  useEffect(() => {
+    if (!open || hasLoggedRef.current) return;
+    if (face.state === 'failure' && face.status.key === 'face.tooMany') {
+      hasLoggedRef.current = true;
+      faceApi.recordScan({
+        userId,
+        result: 'NOT_RECOGNIZED',
+        faceDistance: face.lastDistance ?? null,
+        deviceSessionId: sessionIdRef.current,
+      }).catch(() => null);
+    }
+  }, [face.state, face.status.key, face.lastDistance, open, userId]);
+
+  // Lifecycle: open/close handling
   useEffect(() => {
     if (!open) {
-      stopCamera();
-      setProgress(0);
-      setScanState('starting');
+      face.cancel();
+      setVerified(false);
       return;
     }
 
-    let isMounted = true;
-    let timerId: ReturnType<typeof setInterval> | null = null;
-    let completionTimeout: ReturnType<typeof setTimeout> | null = null;
+    sessionIdRef.current = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    hasLoggedRef.current = false;
+    setVerified(false);
 
-    setScanState('starting');
-    setProgress(0);
-    setStatusMessage('Accessing camera…');
-
-    // 1. Request real webcam stream
-    const startCamera = async () => {
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: 'user',
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-            },
-            audio: false,
-          });
-
-          if (!isMounted) {
-            stream.getTracks().forEach((t) => t.stop());
-            return;
-          }
-
-          streamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            try {
-              await videoRef.current.play();
-            } catch {
-              /* autoplay might need user interaction in some browsers */
-            }
-          }
-          setCameraActive(true);
-        }
-      } catch (err) {
-        // Fallback gracefully (e.g. no camera or permission denied)
-        // eslint-disable-next-line no-console
-        console.warn('[FaceLogin] Camera unavailable, using preview fallback', err);
-        setCameraActive(false);
-      }
-
-      if (!isMounted) return;
-
-      // 2. Start 2-second scan sequence (2000 ms total)
-      setScanState('scanning');
-      const startTime = Date.now();
-      const totalDuration = 2000;
-
-      timerId = setInterval(() => {
-        if (!isMounted) return;
-        const elapsed = Date.now() - startTime;
-        const pct = Math.min(100, Math.round((elapsed / totalDuration) * 100));
-        setProgress(pct);
-
-        if (pct < 30) {
-          setStatusMessage('Aligning face & calibrating…');
-        } else if (pct < 70) {
-          setStatusMessage('Scanning facial landmarks…');
-        } else if (pct < 100) {
-          setStatusMessage('Verifying identity…');
-        } else {
-          // 2 seconds completed!
-          if (timerId) clearInterval(timerId);
-          setScanState('verified');
-          setStatusMessage('Face Verified! Welcome back!');
-
-          // Capture photo frame from video before stopping camera
-          const capturedPhoto = captureFrame();
-
-          if (state.settings.voiceOn) {
-            speakText(`${name}. ${t('login.success.elder')}`);
-          }
-
-          // Stop camera track after verification
-          stopCamera();
-
-          // Smooth transition before navigating/opening
-          completionTimeout = setTimeout(() => {
-            if (isMounted) {
-              onSuccess(capturedPhoto);
-            }
-          }, 350);
-        }
-      }, 50);
-    };
-
-    void startCamera();
+    void fetchProfile();
 
     return () => {
-      isMounted = false;
-      if (timerId) clearInterval(timerId);
-      if (completionTimeout) clearTimeout(completionTimeout);
-      stopCamera();
+      face.cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Start face recognition once profile is loaded and verified
+  useEffect(() => {
+    if (open && profile?.enrolled && !loadingProfile && !verified) {
+      face.start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, profile, loadingProfile]);
+
   const handleClose = () => {
-    stopCamera();
+    if (!hasLoggedRef.current && face.live) {
+      hasLoggedRef.current = true;
+      faceApi.recordScan({
+        userId,
+        result: 'NO_FACE',
+        faceDistance: null,
+        deviceSessionId: sessionIdRef.current,
+      }).catch(() => null);
+    }
+    face.cancel();
     onClose();
   };
 
   const handleUsePin = () => {
-    stopCamera();
+    face.cancel();
     onUsePin();
   };
 
+  const isEnrolled = !!profile?.enrolled && profile.samples.length > 0;
+
   return (
-    <Modal open={open} title={t('face.title')} onClose={handleClose}>
-      <div className="space-y-4">
-        <div className="text-center">
-          <div className="text-xl font-extrabold text-brand-900">🛡️ {t('face.title')}</div>
-          <div className="mt-1 text-sm font-semibold text-neutral-500">
-            {t('face.welcome', { name })}
+    <>
+      <Modal open={open && !showEnrollment} title={t('face.title')} onClose={handleClose}>
+        <div className="space-y-4">
+          <div className="text-center">
+            <div className="text-xl font-extrabold text-brand-900">🛡️ {t('face.title')}</div>
+            <div className="mt-1 text-sm font-semibold text-neutral-500">
+              {t('face.welcome', { name })}
+            </div>
           </div>
-        </div>
 
-        {/* Biometric Camera Viewfinder */}
-        <div className="relative mx-auto flex w-full max-w-sm flex-col items-center">
-          <div
-            className={`relative h-[290px] w-full overflow-hidden rounded-[26px] bg-neutral-900 transition-all duration-300 ${
-              scanState === 'verified'
-                ? 'ring-4 ring-emerald-500 shadow-[0_0_35px_rgba(16,185,129,0.5)]'
-                : 'border border-neutral-700 shadow-lift'
-            }`}
-          >
-            {/* Live Camera Stream */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`h-full w-full object-cover scale-x-[-1] transition-opacity duration-300 ${
-                cameraActive ? 'opacity-100' : 'opacity-0 absolute'
-              }`}
-              aria-label="Live camera preview"
-            />
-
-            {/* Fallback silhouette if webcam is disabled or pending */}
-            {!cameraActive && (
-              <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-neutral-800 to-neutral-950 p-6 text-center text-white">
-                <div className="relative mb-3 flex h-24 w-24 items-center justify-center rounded-full bg-brand-800/60 border-2 border-brand-400/40 text-4xl shadow-inner">
-                  👤
-                  <div className="absolute inset-0 rounded-full border-2 border-dashed border-emerald-400/60 animate-spin" />
-                </div>
-                <p className="text-xs font-semibold text-neutral-400">
-                  {scanState === 'starting' ? 'Starting camera…' : 'Simulating live facial scan…'}
-                </p>
+          {loadingProfile ? (
+            <div className="flex h-56 w-full flex-col items-center justify-center rounded-2xl bg-neutral-50 p-6 text-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+              <p className="mt-3 text-sm font-bold text-neutral-600">Checking biometric security profile…</p>
+            </div>
+          ) : !isEnrolled ? (
+            <div className="space-y-4 rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-6 text-center">
+              <div className="text-4xl">📸</div>
+              <div className="text-lg font-extrabold text-brand-900">No Face Enrolled Yet</div>
+              <p className="text-sm font-semibold text-neutral-600">
+                A face profile has not been set up for this elder yet. You can set it up now or sign in with your PIN.
+              </p>
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEnrollment(true)}
+                  className="rounded-2xl bg-brand-600 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-brand-700"
+                >
+                  📷 Set Up Face Recognition
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUsePin}
+                  className="rounded-2xl border border-neutral-300 bg-white px-5 py-3 text-sm font-extrabold text-neutral-700 transition hover:bg-neutral-100"
+                >
+                  🔐 {t('face.usePin')}
+                </button>
               </div>
-            )}
-
-            {/* Face Targeting Brackets & Laser Scan */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              {/* Central Target Reticle */}
-              <div
-                className={`relative h-44 w-40 rounded-3xl transition-colors duration-300 ${
-                  scanState === 'verified' ? 'border-2 border-emerald-400/80 bg-emerald-500/10' : 'border border-emerald-400/30'
-                }`}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center">
+              <LiveFaceScanner
+                videoRef={face.videoRef}
+                status={face.status}
+                alignment={face.alignment}
+                faceBox={face.faceBox}
+                debug={{
+                  lastFaceCount: face.lastFaceCount,
+                  lastScore: face.lastScore,
+                  lastDistance: face.lastDistance,
+                  confidence: face.confidence,
+                  matchProgress: face.matchProgress,
+                  attemptCount: face.attemptCount,
+                  modelsReady: face.modelsReady,
+                }}
               >
-                {/* 4 Corner HUD Brackets */}
-                <span className="absolute -top-1 -left-1 h-5 w-5 rounded-tl-xl border-t-4 border-l-4 border-emerald-400" />
-                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-tr-xl border-t-4 border-r-4 border-emerald-400" />
-                <span className="absolute -bottom-1 -left-1 h-5 w-5 rounded-bl-xl border-b-4 border-l-4 border-emerald-400" />
-                <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-br-xl border-b-4 border-r-4 border-emerald-400" />
-
-                {/* Sweeping Laser Scan Line */}
-                {scanState === 'scanning' && (
-                  <div className="animate-scanline absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399]" />
-                )}
-
-                {/* Success Checkmark on verified */}
-                {scanState === 'verified' && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-3xl font-extrabold text-white shadow-lift animate-bounce">
-                      ✓
-                    </div>
+                {/* 3-Match Progress Indicator */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2" role="progressbar" aria-valuenow={face.matchProgress} aria-valuemin={0} aria-valuemax={3}>
+                    {[1, 2, 3].map((step) => (
+                      <div
+                        key={step}
+                        className={`h-3 w-12 rounded-full transition-all duration-200 ${
+                          verified || face.matchProgress >= step
+                            ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]'
+                            : 'bg-neutral-200'
+                        }`}
+                      />
+                    ))}
                   </div>
-                )}
+
+                  <div className="text-xs font-bold text-brand-700">
+                    {verified
+                      ? '✓ Biometric Match Confirmed'
+                      : face.matchProgress > 0
+                      ? `Verifying… ${face.matchProgress}/3 matches`
+                      : 'Looking for face…'}
+                  </div>
+
+                  {face.state === 'failure' && (
+                    <div className="flex w-full flex-col gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          hasLoggedRef.current = false;
+                          face.start();
+                        }}
+                        className="rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow hover:bg-brand-700"
+                      >
+                        🔄 Try Scan Again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </LiveFaceScanner>
+
+              {/* PIN Fallback button */}
+              <div className="mt-4 w-full max-w-md">
+                <button
+                  type="button"
+                  onClick={handleUsePin}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-white px-4 py-3 text-sm font-extrabold text-brand-700 shadow-sm transition hover:bg-brand-50 hover:shadow-card"
+                >
+                  🔐 {t('face.usePin')}
+                </button>
               </div>
             </div>
-
-            {/* Top Live Badge */}
-            <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-xs font-bold text-white backdrop-blur">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  scanState === 'verified'
-                    ? 'bg-emerald-400'
-                    : 'bg-emerald-400 animate-ping'
-                }`}
-              />
-              <span>{scanState === 'verified' ? 'MATCH FOUND' : 'SCANNING 2s'}</span>
-            </div>
-
-            {/* Bottom Status Bar */}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-3 pt-6 text-center">
-              <div
-                className={`text-sm font-extrabold tracking-wide ${
-                  scanState === 'verified' ? 'text-emerald-300' : 'text-white'
-                }`}
-              >
-                {statusMessage}
-              </div>
-            </div>
-          </div>
-
-          {/* 2-Second Progress Bar */}
-          <div className="mt-3 w-full space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-extrabold text-neutral-500">
-              <span>{scanState === 'verified' ? 'Verified 100%' : `Scanning… ${((progress / 100) * 2).toFixed(1)}s / 2.0s`}</span>
-              <span className="text-brand-700">{progress}%</span>
-            </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-neutral-200">
-              <div
-                className={`h-full rounded-full transition-all duration-75 ${
-                  scanState === 'verified'
-                    ? 'bg-emerald-500'
-                    : 'bg-gradient-to-r from-brand-500 to-emerald-500'
-                }`}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+          )}
         </div>
+      </Modal>
 
-        {/* PIN Fallback button */}
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={handleUsePin}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-white px-4 py-3 text-sm font-extrabold text-brand-700 shadow-sm transition hover:bg-brand-50 hover:shadow-card"
-          >
-            🔐 {t('face.usePin')}
-          </button>
-        </div>
-      </div>
-    </Modal>
+      {/* Face Enrollment Modal if triggered from login */}
+      <FaceEnrollment
+        open={showEnrollment}
+        onClose={() => setShowEnrollment(false)}
+        onEnrolled={() => {
+          setShowEnrollment(false);
+          void fetchProfile();
+        }}
+      />
+    </>
   );
 }

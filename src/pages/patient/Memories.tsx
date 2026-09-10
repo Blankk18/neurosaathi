@@ -20,32 +20,54 @@ function initials(name: string): string {
   return name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 }
 
+import { memoryService } from '@/services/memoryService';
+
 // READ-ONLY for the elder.
 // Family memories are created, edited and removed by the caregiver (see the
 // caregiver Family Memories manager). The elder can view their album here.
 export default function Memories() {
   const { t, state, isOffline } = useApp();
   const navigate = useNavigate();
-  const family = state.familyMemories;
+  const elderId = state.patient?.id || 'e0000000-0000-0000-0000-000000000001';
+  const [memories, setMemories] = useState<FamilyMemory[]>(state.familyMemories);
   const [photos, setPhotos] = useState<Record<string, string | null>>({});
   const [large, setLarge] = useState<FamilyMemory | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const remote = await memoryService.getMemories(elderId);
+      const list = remote.length > 0 ? remote : state.familyMemories;
+      setMemories(list);
+
+      const map: Record<string, string | null> = {};
+      for (const f of list) {
+        if (f.photo) {
+          map[f.id] = f.photo;
+        } else {
+          const blob = await loadImage(`fam-${f.id}`);
+          if (blob) map[f.id] = URL.createObjectURL(blob);
+        }
+      }
+      setPhotos(map);
+    } catch {
+      setMemories(state.familyMemories);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    const loadAll = async () => {
-      const map: Record<string, string | null> = {};
-      for (const f of family) {
-        const blob = await loadImage(`fam-${f.id}`);
-        if (mounted && blob) map[f.id] = URL.createObjectURL(blob);
-      }
-      if (mounted) setPhotos(map);
-    };
     void loadAll();
+    const unsubscribe = memoryService.subscribeToMemories(elderId, () => {
+      void loadAll();
+    });
     return () => {
-      mounted = false;
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family.length]);
+  }, [elderId, state.familyMemories.length]);
 
   return (
     <div className="mx-auto min-h-dvh max-w-3xl bg-canvas px-4 pb-28 pt-4">
@@ -62,6 +84,13 @@ export default function Memories() {
         </div>
       )}
 
+      {loading && (
+        <div className="mt-2 flex items-center gap-2 text-xs font-bold text-neutral-400">
+          <span className="h-2 w-2 rounded-full bg-brand-500 animate-ping" />
+          Syncing memories with family…
+        </div>
+      )}
+
       {/* Album header — count + soft description */}
       <div className="mt-6 rounded-3xl bg-white p-5 shadow-card">
         <div className="flex items-center gap-3">
@@ -71,7 +100,7 @@ export default function Memories() {
           <div>
             <div className="text-xs font-extrabold uppercase tracking-widest text-brand-600">Memory album</div>
             <div className="text-lg font-extrabold text-brand-900">
-              {family.length} {family.length === 1 ? 'person' : 'people'} remembered
+              {memories.length} {memories.length === 1 ? 'person' : 'people'} remembered
             </div>
           </div>
         </div>
@@ -82,7 +111,7 @@ export default function Memories() {
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {family.map((f, idx) => {
+        {memories.map((f, idx) => {
           const photo = photos[f.id];
           return (
             <button
@@ -171,7 +200,7 @@ export default function Memories() {
         })}
       </div>
 
-      {family.length === 0 && (
+      {memories.length === 0 && (
         <Card className="mt-5 flex flex-col items-center gap-3 py-10 text-center">
           <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
             <UsersIcon size={28} />

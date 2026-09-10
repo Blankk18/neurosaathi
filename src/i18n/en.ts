@@ -292,6 +292,7 @@ export const en: Record<string, string> = {
   'cg.activity': 'Activity',
   'cg.settings': 'Settings',
   'cg.familyMemories': 'Family Memories',
+  'cg.faceRecognition': 'Face Recognition',
   'cg.engagement': 'Cognitive Engagement',
   'cg.memory': 'Memory Performance',
   'cg.attention': 'Attention',

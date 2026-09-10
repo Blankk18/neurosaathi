@@ -3,6 +3,9 @@ import { useApp } from '@/state/AppContext';
 import { buildGameResult, type SessionMetrics } from '@/engine/scoring';
 import { decideFromCurrent, recentForGame, currentDifficulty, type AdaptationDecision } from '@/engine/adaptive';
 import type { GameKind, GameResult } from '@/types';
+import { gameService } from '@/services/gameService';
+
+const isUUID = (id?: string) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 export function useGameSession(game: GameKind) {
   const { state, dispatch } = useApp();
@@ -21,6 +24,7 @@ export function useGameSession(game: GameKind) {
         : 3,
       mistakes: metrics.mistakes,
     });
+    const elderId = isUUID(state.patient?.id) ? state.patient!.id : 'e0000000-0000-0000-0000-000000000001';
     const result = buildGameResult(
       state.patient?.id ?? 'patient-asha',
       game,
@@ -32,6 +36,10 @@ export function useGameSession(game: GameKind) {
     );
     dispatch({ type: 'ADD_GAME_RESULT', result });
     setLast({ result, decision });
+
+    // Asynchronously record session to Supabase
+    void gameService.recordSession(elderId, result);
+
     return { result, decision };
   };
 

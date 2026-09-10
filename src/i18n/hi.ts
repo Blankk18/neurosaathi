@@ -269,6 +269,7 @@ export const hi: Record<string, string> = {
   'cg.activity': 'गतिविधि',
   'cg.settings': 'सेटिंग्स',
   'cg.familyMemories': 'पारिवारिक यादें',
+  'cg.faceRecognition': 'चेहरा पहचान',
   'cg.engagement': 'संज्ञानात्मक सहभागिता',
   'cg.memory': 'स्मृति प्रदर्शन',
   'cg.attention': 'ध्यान',

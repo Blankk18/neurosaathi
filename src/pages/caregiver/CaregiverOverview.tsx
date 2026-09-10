@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -17,20 +17,63 @@ import { Card, StatTile, SectionTitle, Chip } from '@/components/ui';
 import { AiEnginePanel } from './AiEnginePanel';
 import * as stats from './stats';
 import { pastWeek, blendTrend } from './charts';
+import { faceApi } from '@/services/faceApi';
+import { ElderSelector } from '@/components/caregiver/ElderSelector';
+import { progressService, type CognitiveMetrics } from '@/services/progressService';
+import type { DbElderProfile } from '@/types/database';
 
 export default function CaregiverOverview() {
   const { t, state } = useApp();
-  const patient = state.patient;
+  const [selectedElder, setSelectedElder] = useState<DbElderProfile | null>(null);
+  const activeElderId = selectedElder?.id || state.patient?.id || 'e0000000-0000-0000-0000-000000000001';
+  const elderName = selectedElder?.name || state.patient?.name || 'Asha Sharma';
+
+  const [serverFaceLogin, setServerFaceLogin] = useState<{
+    photo: string;
+    timestamp: string;
+    name: string;
+  } | null>(null);
+
+  const [dbMetrics, setDbMetrics] = useState<CognitiveMetrics | null>(null);
+
+  useEffect(() => {
+    // Check biometric face login status for the currently selected elder
+    faceApi
+      .getStatus(activeElderId)
+      .then((status) => {
+        if (status.lastPhoto && status.lastSuccessfulScan) {
+          setServerFaceLogin({
+            photo: status.lastPhoto,
+            timestamp: status.lastSuccessfulScan,
+            name: elderName,
+          });
+        } else {
+          setServerFaceLogin(null);
+        }
+      })
+      .catch(() => setServerFaceLogin(null));
+
+    // Load actual database cognitive metrics for the selected elder
+    progressService.getCognitiveMetrics(activeElderId).then((metrics) => {
+      if (metrics.hasData) {
+        setDbMetrics(metrics);
+      } else {
+        setDbMetrics(null);
+      }
+    });
+  }, [activeElderId, elderName]);
+
+  const activeFaceLogin = state.lastFaceLogin || serverFaceLogin;
 
   const kpis = useMemo(
     () => ({
-      engagement: stats.engagement(state),
-      memory: stats.memoryPerformance(state),
-      attention: stats.attentionLevel(state),
+      engagement: dbMetrics?.hasData ? dbMetrics.averageAccuracy : stats.engagement(state),
+      memory: dbMetrics?.hasData ? dbMetrics.memoryScore : stats.memoryPerformance(state),
+      attention: dbMetrics?.hasData ? dbMetrics.attentionScore : stats.attentionLevel(state),
       adherence: stats.adherence(state),
-      weekly: stats.weeklyActiveDays(state),
+      weekly: dbMetrics?.hasData ? Math.min(7, dbMetrics.totalSessions) : stats.weeklyActiveDays(state),
     }),
-    [state],
+    [state, dbMetrics],
   );
 
   const memory = useMemo(() => blendTrend(pastWeek(), stats.memoryTrend(state)), [state]);
@@ -40,33 +83,45 @@ export default function CaregiverOverview() {
 
   return (
     <div className="fade-in space-y-6">
+      {/* Multi-Elder Selector bar */}
+      <div className="rounded-3xl bg-white p-3 shadow-card">
+        <ElderSelector
+          selectedElderId={activeElderId}
+          onSelectElder={setSelectedElder}
+        />
+      </div>
+
       {/* patient identity card */}
       <Card className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center gap-4 bg-gradient-to-br from-brand-50 via-white to-warm-50 p-5 sm:p-6">
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-600 text-2xl font-extrabold text-white shadow-soft ring-4 ring-white/70">
-            {patient?.name?.[0] ?? 'A'}
+            {elderName[0] ?? 'A'}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-2xl font-extrabold text-brand-900">{patient?.name ?? 'Asha Sharma'}</div>
+            <div className="text-2xl font-extrabold text-brand-900">{elderName}</div>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Chip tone="brand">{t('cg.age')}: {patient?.age ?? 68}</Chip>
-              <Chip tone="brand">{t('cg.language')}: {patient?.language ? patient.language.toUpperCase() : 'HI'}</Chip>
-              <Chip tone="brand">{t('cg.region')}: {patient?.region ?? 'assam'}</Chip>
-              <Chip tone="info">{t('cg.lastActive')}: {stats.lastActiveLabel(state)}</Chip>
+              <Chip tone="brand">{t('cg.age')}: {selectedElder?.age ?? state.patient?.age ?? 68}</Chip>
+              <Chip tone="brand">
+                {t('cg.language')}: {(selectedElder?.preferred_language || state.patient?.language || 'hi').toUpperCase()}
+              </Chip>
+              <Chip tone="brand">{t('cg.region')}: {selectedElder?.region ?? state.patient?.region ?? 'assam'}</Chip>
+              <Chip tone="info">
+                {t('cg.lastActive')}: {dbMetrics?.lastActive ? new Date(dbMetrics.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : stats.lastActiveLabel(state)}
+              </Chip>
             </div>
           </div>
           <Chip tone="warm">{t('cg.relationship')}: {state.caregiver.relationship}</Chip>
         </div>
       </Card>
 
-      {/* Recent Face Check-In Card (when available) */}
-      {state.lastFaceLogin && (
+      {/* Recent Face Check-In Card (when available, works cross-device) */}
+      {activeFaceLogin && (
         <Card className="border border-emerald-200 bg-gradient-to-r from-emerald-50/90 via-white to-brand-50/70 p-4 shadow-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border-2 border-emerald-400 shadow-sm">
                 <img
-                  src={state.lastFaceLogin.photo}
+                  src={activeFaceLogin.photo}
                   alt="Verified Face"
                   className="h-full w-full object-cover"
                 />
@@ -84,19 +139,19 @@ export default function CaregiverOverview() {
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-neutral-600 font-semibold truncate">
-                  {state.lastFaceLogin.name} signed in successfully via biometric face scan.
+                  {activeFaceLogin.name} signed in successfully via biometric face scan.
                 </p>
                 <p className="text-[11px] text-neutral-400 font-mono">
-                  {new Date(state.lastFaceLogin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} today
+                  {new Date(activeFaceLogin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} today
                 </p>
               </div>
             </div>
 
             <NavLink
-              to="/caregiver/alerts"
+              to="/caregiver/face-scans"
               className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-brand-800 px-4 py-2 text-xs font-extrabold text-white hover:bg-brand-700 transition"
             >
-              View in Alerts →
+              View in Audit Logs →
             </NavLink>
           </div>
         </Card>

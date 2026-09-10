@@ -6,14 +6,24 @@
 // After enrollment the elder can immediately "Test Face Login".
 // ============================================================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useApp } from '@/state/AppContext';
 import { Button, Modal } from '@/components/ui';
 import { LiveFaceScanner } from './LiveFaceScanner';
 import { useFaceRecognition } from './useFaceRecognition';
 import { saveFaceProfile, buildFaceProfile, resetFaceProfile } from './faceRecognition.service';
 import { ENROLLMENT_SAMPLES } from './faceRecognition.config';
+import { faceApi } from '@/services/faceApi';
 import type { FaceSample } from './types';
+
+const GUIDED_PROMPTS = [
+  "Let's set up face recognition. Look at the camera.",
+  'Look at the camera',
+  'Turn slightly left',
+  'Turn slightly right',
+  'Look straight ahead',
+  'Hold still',
+];
 
 export function FaceEnrollment({
   open,
@@ -28,6 +38,7 @@ export function FaceEnrollment({
   const [samples, setSamples] = useState<FaceSample[]>([]);
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
+  const lastSpokenStep = useRef<number>(-1);
 
   const face = useFaceRecognition({
     profile: null,
@@ -37,12 +48,29 @@ export function FaceEnrollment({
     },
   });
 
+  // Calculate current guide step based on collected samples (0 to 5)
+  const currentStepIdx = Math.min(
+    GUIDED_PROMPTS.length - 1,
+    Math.floor((samples.length / ENROLLMENT_SAMPLES) * GUIDED_PROMPTS.length)
+  );
+  const currentPrompt = GUIDED_PROMPTS[currentStepIdx];
+
+  // Speak prompt when step changes
+  useEffect(() => {
+    if (!open || done || currentStepIdx === lastSpokenStep.current) return;
+    lastSpokenStep.current = currentStepIdx;
+    if (state.settings.voiceOn) {
+      speakText(currentPrompt);
+    }
+  }, [open, done, currentStepIdx, currentPrompt, speakText, state.settings.voiceOn]);
+
   // start scanning when the modal opens; always release the camera on close
   useEffect(() => {
     if (!open) return;
     setSamples([]);
     setDone(false);
     setFailed(false);
+    lastSpokenStep.current = -1;
     face.start();
     return () => {
       face.cancel();
@@ -62,9 +90,23 @@ export function FaceEnrollment({
   // persist profile once enrollment completes
   useEffect(() => {
     if (!done) return;
-    const profile = buildFaceProfile(samples, state.patient?.id);
-    void saveFaceProfile(profile).then((ok) => {
-      if (!ok) setFailed(true);
+    const patientId = state.patient?.id || 'patient-1';
+    const profile = buildFaceProfile(samples, patientId);
+
+    // Save locally (IndexedDB) and sync to server-side biometrics
+    Promise.all([
+      saveFaceProfile(profile),
+      faceApi.enroll(
+        patientId,
+        samples.map((s) => s.descriptor),
+        'tiny_face_vladmandic'
+      ).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[FaceEnrollment] Server-side enrollment sync notice:', err);
+        return null;
+      }),
+    ]).then(([localOk]) => {
+      if (!localOk) setFailed(true);
       else if (state.settings.voiceOn) speakText(t('face.ready.msg'));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,10 +117,15 @@ export function FaceEnrollment({
 
   const reset = () => {
     face.cancel();
-    void resetFaceProfile().then(() => {
+    const patientId = state.patient?.id || 'patient-1';
+    void Promise.all([
+      resetFaceProfile(),
+      faceApi.resetEnrollment(patientId).catch(() => null),
+    ]).then(() => {
       setSamples([]);
       setDone(false);
       setFailed(false);
+      lastSpokenStep.current = -1;
     });
   };
 
@@ -124,12 +171,15 @@ export function FaceEnrollment({
               modelsReady: face.modelsReady,
             }}
           >
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-full max-w-sm rounded-xl bg-brand-50 px-4 py-2 text-center text-sm font-extrabold text-brand-800 border border-brand-200 shadow-sm animate-pulse">
+                {currentPrompt}
+              </div>
               <div className="flex items-center gap-1" role="progressbar" aria-valuemin={0} aria-valuemax={ENROLLMENT_SAMPLES} aria-valuenow={collected}>
                 {Array.from({ length: ENROLLMENT_SAMPLES }).map((_, i) => (
                   <span
                     key={i}
-                    className={`h-3 w-6 rounded-full ${i < collected ? 'bg-emerald-500' : 'bg-neutral-200'}`}
+                    className={`h-3 w-6 rounded-full transition-colors duration-300 ${i < collected ? 'bg-emerald-500' : 'bg-neutral-200'}`}
                     aria-hidden
                   />
                 ))}
