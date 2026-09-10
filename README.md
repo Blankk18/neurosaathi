@@ -50,6 +50,46 @@ Each completed session records:
 
 ---
 
+## 🛡️ NEUROSAATHI GUARDIAN — Location Safety (SIH 2026 Showcase)
+
+Guardian is the live-location safety layer: the caregiver can see **where the elder
+is**, configure a **home geofence** plus **familiar safe places**, watch a **movement
+trail**, and get **risk-posture alerts** — with a **demo location simulator** so
+judges can exercise the whole flow without physically moving a device.
+
+**Responsible by design** — Guardian is a *location* heuristic for caregiver
+awareness. It **never says "lost" and never diagnoses**; an unrecognised location
+only raises the posture so a caregiver can look, and **Search Mode** is the
+caregiver's explicit escalation to alert helpers.
+
+### Caregiver location dashboard (`/caregiver/location`)
+- Live risk banner (🟢 safe · 🟡 attention · 🟠 unusual · 🔴 high / search mode)
+- **Hybrid map**: real Leaflet + OpenStreetMap when online, an on-brand offline
+  SVG schematic when there is no network (labelled "Offline map")
+- Elder marker, home & safe-place geofences, movement trail, accuracy radius
+- Elder snapshot: last-update age, accuracy, distance from home, nearest place
+- **Demo simulator** (simulated moves for judges): Home, Leave, Temple, Hospital,
+  Grocery, Unknown — each fixing the elder's position and updating the risk ladder
+- Live GPS mode via `navigator.geolocation` (permission-gated, with a clear
+  denied-state flow)
+- Home geofence config, safe-place manager, emergency contacts (with `tel:` call)
+- **Search Mode** toggle (forces 🔴 high) and **on-device alarm** trigger
+
+### Elder safety view (`/safety`)
+- Reassuring, plain-language status ("You're safe") tuned by risk posture
+- One giant **"Call caregiver"** button (rings the first emergency contact)
+- On-device **alarm overlay** when the caregiver triggers an alarm, with a calm
+  "OK, I'm here" response
+
+Guardian alerts reuse the app's existing `Alert` feed and are **debounced** so a
+transition never spams. Simulated fixes are **always** labelled
+`Demo / Simulated location` — never posed as real GPS.
+
+> Demo tip: open `/demo` → step 13 (Location safety) to try the simulator inline,
+> or use the sim buttons on `/caregiver/location`.
+
+---
+
 ## 🤖 Adaptive Difficulty Engine
 
 NeuroSaathi uses a rule-based adaptive engine in the current prototype.

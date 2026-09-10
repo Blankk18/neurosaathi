@@ -4,6 +4,8 @@ import { useApp } from '@/state/AppContext';
 import { Card, Button, ProgressRing, Chip, Disclaimer } from '@/components/ui';
 import { simulateDecline, evaluateAttentionIndicator } from '@/engine/alerts';
 import { generatedInsights } from '../caregiver/stats';
+import MapView from '@/components/MapView';
+import { SIM_MOVES } from '@/services/guardianSimulator';
 
 interface Step {
   id: number;
@@ -25,10 +27,11 @@ const STEPS: Step[] = [
   { id: 10, icon: '📊', titleKey: 'demo.step10.title', descKey: 'demo.step10.desc' },
   { id: 11, icon: '💡', titleKey: 'demo.step11.title', descKey: 'demo.step11.desc' },
   { id: 12, icon: '⚠️', titleKey: 'demo.step12.title', descKey: 'demo.step12.desc' },
+  { id: 13, icon: '🚨', titleKey: 'demo.guardian.title', descKey: 'demo.guardian.desc' },
 ];
 
 export default function DemoMode() {
-  const { t, state, dispatch, speakText, runSync, resetAll } = useApp();
+  const { t, state, dispatch, speakText, runSync, resetAll, guardianSimulate } = useApp();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [miniMatched, setMiniMatched] = useState(false);
@@ -276,6 +279,34 @@ export default function DemoMode() {
             </div>
             <div className="mx-auto mt-4 max-w-xl">
               <Disclaimer>{t('cg.insight.label')}</Disclaimer>
+            </div>
+          </StepShell>
+        );
+      case 13:
+        return (
+          <StepShell>
+            <div className="mx-auto max-w-md space-y-3">
+              <p className="text-sm font-semibold text-neutral-500">{t('demo.guardian.desc')}</p>
+              <MapView
+                home={state.guardian.home}
+                safeLocations={state.guardian.safeLocations}
+                current={state.guardian.current}
+                trail={state.guardian.trail}
+              />
+              <div className="flex flex-wrap justify-center gap-2">
+                {SIM_MOVES.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => guardianSimulate(m.id)}
+                    className="rounded-full bg-white px-4 py-2.5 text-base font-bold text-brand-800 shadow-card ring-1 ring-brand-100 hover:bg-brand-50"
+                  >
+                    {m.icon} {t(m.labelKey)}
+                  </button>
+                ))}
+              </div>
+              <Button variant="primary" size="md" className="rounded-full" onClick={() => navigate('/caregiver')}>
+                📍 {t('guardian.title')} →
+              </Button>
             </div>
           </StepShell>
         );

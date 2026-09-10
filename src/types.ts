@@ -59,6 +59,72 @@ export type Mood = 'happy' | 'good' | 'okay' | 'sad' | 'worried';
 
 export type AlertSeverity = 'info' | 'attention' | 'critical';
 
+// ============================================================================
+// GUARDIAN — location safety system
+// ============================================================================
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+/** A configured geofenced place (home, temple, hospital, ...). */
+export interface SafeLocation {
+  id: string;
+  name: string;
+  type: 'home' | 'known' | 'caregiver' | 'hospital' | 'other';
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
+export interface LocationUpdate {
+  timestamp: string; // ISO
+  lat: number;
+  lng: number;
+  accuracyM: number;
+  simulated?: boolean;
+}
+
+/** Current risk posture — never a medical claim, just a location heuristic. */
+export type RiskLevel = 'safe' | 'attention' | 'unusual' | 'high';
+
+export interface GuardianState {
+  /** Configured home zone (geofence centre + radius). Null until configured. */
+  home: SafeLocation | null;
+  /** Recognised safe places (excludes home, which is stored separately). */
+  safeLocations: SafeLocation[];
+  /** Latest known position (real GPS when granted, else simulated — see `simulated`). */
+  current: LocationUpdate | null;
+  /** Bounded movement trail, newest last. */
+  trail: LocationUpdate[];
+  /** Current risk posture. */
+  status: RiskLevel;
+  /** ISO time when the current risk posture began — used for "left home N min ago". */
+  statusSince: string;
+  /** Id of the recognised zone currently containing the elder, if any. */
+  currentZoneId: string | null;
+  /** Caregiver-driven higher-attention mode. */
+  searchMode: boolean;
+  searchModeSince?: string;
+  /** Caregiver has triggered an on-device attention alarm. */
+  alarmActive: boolean;
+  /** True when geolocation permission was denied (real GPS unavailable). */
+  accessDenied: boolean;
+  /** Whether location services are active. */
+  tracking: boolean;
+  /** Demo/simulated positioning is in effect — surfaced honestly in the UI. */
+  simulated: boolean;
+}
+
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  relationship: string;
+  phone: string;
+  email?: string;
+}
+
 export type SyncStatus = 'pending' | 'synced' | 'failed';
 
 export interface User {
@@ -211,6 +277,10 @@ export interface AppState {
   syncRecords: SyncRecord[];
   timeline: TimelineEvent[];
   settings: Settings;
+  /** NEUROSAATHI GUARDIAN — location safety state. */
+  guardian: GuardianState;
+  /** Caregiver-configured emergency contacts. */
+  emergencyContacts: EmergencyContact[];
   offlineSince?: string;
   lastSynced?: string;
   demo: DemoState;

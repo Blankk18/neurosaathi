@@ -7,6 +7,9 @@ import type {
   MoodEntry,
   Alert,
   TimelineEvent,
+  GuardianState,
+  SafeLocation,
+  EmergencyContact,
 } from '@/types';
 
 // ============================================================================
@@ -14,6 +17,90 @@ import type {
 // ============================================================================
 
 export const DEMO_PATIENT_ID = 'patient-asha';
+
+// ============================================================================
+// GUARDIAN demo seed — a believable home + familiar places around Guwahati,
+// Assam. Coordinates are illustrative demo data, clearly surfaced as simulated.
+// ============================================================================
+
+export const GUARDIAN_HOME_BASE = { lat: 26.1445, lng: 91.7362 };
+
+const zone = (
+  id: string,
+  name: string,
+  type: SafeLocation['type'],
+  offsetLat: number,
+  offsetLng: number,
+  radiusM: number,
+): SafeLocation => ({
+  id,
+  name,
+  type,
+  lat: GUARDIAN_HOME_BASE.lat + offsetLat,
+  lng: GUARDIAN_HOME_BASE.lng + offsetLng,
+  radiusM,
+});
+
+export const HOME_ZONE: SafeLocation = zone('guard-home', 'Home', 'home', 0, 0, 120);
+
+export const GUARD_SAFE_LOCATIONS: SafeLocation[] = [
+  HOME_ZONE,
+  zone('guard-temple', 'Temple', 'other', 0.0, 0.012, 150),
+  zone('guard-daughter', "Daughter's house", 'caregiver', -0.0217, 0.0, 150),
+  zone('guard-hospital', 'Hospital', 'hospital', 0.014, 0.0406, 200),
+  zone('guard-grocery', 'Grocery store', 'other', 0.0, 0.015, 100),
+  zone('guard-doctor', 'Doctor', 'known', -0.011, 0.0128, 130),
+];
+
+export const GUARD_EMERGENCY_CONTACTS: EmergencyContact[] = [
+  { id: 'guard-contact-rohan', name: 'Rohan Sharma', relationship: 'Son', phone: '+91 98765 43210' },
+  { id: 'guard-contact-meena', name: 'Meena Sharma', relationship: 'Daughter', phone: '+91 98765 12345' },
+];
+
+/** Empty guardian state — used when resetting just the location system. */
+export function defaultGuardian(): GuardianState {
+  return {
+    home: null,
+    safeLocations: [],
+    current: null,
+    trail: [],
+    status: 'safe',
+    statusSince: new Date().toISOString(),
+    currentZoneId: null,
+    searchMode: false,
+    alarmActive: false,
+    accessDenied: false,
+    tracking: false,
+    simulated: false,
+  };
+}
+
+/** Populated demo guardian state — home, familiar places, elder at home. */
+export function guardSeed(): GuardianState {
+  return {
+    ...defaultGuardian(),
+    home: HOME_ZONE,
+    safeLocations: GUARD_SAFE_LOCATIONS,
+    current: {
+      timestamp: new Date().toISOString(),
+      lat: HOME_ZONE.lat,
+      lng: HOME_ZONE.lng,
+      accuracyM: 12,
+      simulated: true,
+    },
+    trail: [
+      {
+        timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+        lat: HOME_ZONE.lat,
+        lng: HOME_ZONE.lng,
+        accuracyM: 9,
+        simulated: true,
+      },
+    ],
+    currentZoneId: 'guard-home',
+    simulated: true,
+  };
+}
 
 // 7-day memory performance trend (Mon..Sun) — mirrors spec section 18/19.
 export const WEEK_TREND = [
@@ -175,7 +262,7 @@ function makeAlerts(): Alert[] {
 
 export function buildDemoState(): AppState {
   return {
-    version: 1,
+    version: 2,
     currentRole: 'elder',
     patient: {
       id: DEMO_PATIENT_ID,
@@ -221,6 +308,8 @@ export function buildDemoState(): AppState {
     familyMemories: makeFamily(),
     moods: makeMoods(),
     alerts: makeAlerts(),
+    emergencyContacts: GUARD_EMERGENCY_CONTACTS,
+    guardian: guardSeed(),
     syncRecords: [],
     timeline: makeTimeline(),
     settings: {

@@ -2,17 +2,22 @@ import type {
   AppState,
   Caregiver,
   CognitiveProfile,
+  EmergencyContact,
   FamilyMemory,
   GameResult,
+  GuardianState,
+  LocationUpdate,
   Mood,
   MoodEntry,
   Patient,
   Reminder,
+  RiskLevel,
   Role,
+  SafeLocation,
   Settings,
   TimelineEvent,
 } from '@/types';
-import { buildDemoState, uid, DEMO_PATIENT_ID } from '@/data/demoData';
+import { buildDemoState, uid, DEMO_PATIENT_ID, defaultGuardian } from '@/data/demoData';
 import { queueSyncRecord } from '@/services/sync';
 
 export type Action =
@@ -36,7 +41,19 @@ export type Action =
   | { type: 'ENQUEUE_SYNC'; label: string; detail: string; kind: 'game' | 'reminder' | 'mood' | 'profile' }
   | { type: 'SET_DEMO'; step?: number; active?: boolean; completed?: boolean }
   | { type: 'ADD_RESULTS'; results: GameResult[] }
-  | { type: 'CLEAR_ALERTS' };
+  | { type: 'CLEAR_ALERTS' }
+
+  // ---- GUARDIAN (location safety) ----
+  | { type: 'GUARDIAN_UPDATE'; current: LocationUpdate; trail: LocationUpdate[]; status: RiskLevel; statusSince: string; currentZoneId: string | null }
+  | { type: 'GUARDIAN_PATCH'; patch: Partial<GuardianState> }
+  | { type: 'CONFIGURE_HOME'; location: SafeLocation }
+  | { type: 'ADD_SAFE_LOCATION'; location: SafeLocation }
+  | { type: 'UPDATE_SAFE_LOCATION'; location: SafeLocation }
+  | { type: 'REMOVE_SAFE_LOCATION'; id: string }
+  | { type: 'ADD_CONTACT'; contact: EmergencyContact }
+  | { type: 'UPDATE_CONTACT'; contact: EmergencyContact }
+  | { type: 'REMOVE_CONTACT'; id: string }
+  | { type: 'RESET_GUARDIAN' };
 
 function todayTimelineTime(): string {
   const d = new Date();
@@ -245,6 +262,75 @@ export function reducer(state: AppState, action: Action): AppState {
           : withQueue.profile,
       };
     }
+
+    // ---- GUARDIAN (location safety) ----
+
+    case 'GUARDIAN_UPDATE': {
+      return {
+        ...state,
+        guardian: {
+          ...state.guardian,
+          current: action.current,
+          trail: action.trail,
+          status: action.status,
+          statusSince: action.statusSince,
+          currentZoneId: action.currentZoneId,
+          tracking: true,
+        },
+      };
+    }
+
+    case 'GUARDIAN_PATCH':
+      return { ...state, guardian: { ...state.guardian, ...action.patch } };
+
+    case 'CONFIGURE_HOME':
+      return { ...state, guardian: { ...state.guardian, home: action.location } };
+
+    case 'ADD_SAFE_LOCATION':
+      return {
+        ...state,
+        guardian: {
+          ...state.guardian,
+          safeLocations: [...state.guardian.safeLocations, action.location],
+        },
+      };
+
+    case 'UPDATE_SAFE_LOCATION':
+      return {
+        ...state,
+        guardian: {
+          ...state.guardian,
+          safeLocations: state.guardian.safeLocations.map((l) =>
+            l.id === action.location.id ? action.location : l,
+          ),
+        },
+      };
+
+    case 'REMOVE_SAFE_LOCATION':
+      return {
+        ...state,
+        guardian: {
+          ...state.guardian,
+          safeLocations: state.guardian.safeLocations.filter((l) => l.id !== action.id),
+        },
+      };
+
+    case 'ADD_CONTACT':
+      return { ...state, emergencyContacts: [...state.emergencyContacts, action.contact] };
+
+    case 'UPDATE_CONTACT':
+      return {
+        ...state,
+        emergencyContacts: state.emergencyContacts.map((c) =>
+          c.id === action.contact.id ? action.contact : c,
+        ),
+      };
+
+    case 'REMOVE_CONTACT':
+      return { ...state, emergencyContacts: state.emergencyContacts.filter((c) => c.id !== action.id) };
+
+    case 'RESET_GUARDIAN':
+      return { ...state, guardian: defaultGuardian() };
 
     default:
       return state;

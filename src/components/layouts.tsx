@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
-import { HomeIcon, GamesIcon, BellIcon, HeartsIcon, ChartIcon, GridIcon, UserIcon, LightbulbIcon, AlertIcon, SpeakerIcon, StopIcon } from './Icons';
+import { HomeIcon, GamesIcon, BellIcon, HeartsIcon, ChartIcon, GridIcon, UserIcon, LightbulbIcon, AlertIcon, SpeakerIcon, StopIcon, ShieldIcon } from './Icons';
 import { AccessibilityControls, LanguageSelector, OfflineBadge } from './common';
 import { Modal, Toast } from './ui';
 
@@ -12,6 +12,7 @@ import { Modal, Toast } from './ui';
 const PATIENT_NAV = [
   { to: '/home', label: 'nav.home', Icon: HomeIcon },
   { to: '/games', label: 'nav.games', Icon: GamesIcon },
+  { to: '/safety', label: 'safety.title', Icon: ShieldIcon },
   { to: '/reminders', label: 'nav.reminders', Icon: BellIcon },
   { to: '/memories', label: 'nav.memories', Icon: HeartsIcon },
   { to: '/progress', label: 'nav.progress', Icon: ChartIcon },
@@ -28,6 +29,7 @@ const PATIENT_PAGE_SPEECH: Record<string, string[]> = {
   '/games/routine': ['games.routine', 'routine.watch'],
   '/games/family': ['games.family', 'family.start.desc'],
   '/games/region': ['games.region', 'region.familiar'],
+  '/safety': ['safety.title', 'safety.allGood'],
   '/reminders': ['reminders.title'],
   '/memories': ['family.title'],
   '/progress': ['progress.title'],
@@ -51,6 +53,7 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col pb-28">
       <PatientTopBar />
+      <AlarmOverlay />
       <main className="flex-1 px-4">{children}</main>
       <OfflineBanner />
       <nav
@@ -135,6 +138,34 @@ function PatientTopBar() {
 }
 
 // ============================================================================
+// Alarm overlay — full-screen attention screen on the elder's device when the
+// caregiver triggers the Guardian alarm. Calm wording, one clear response.
+// ============================================================================
+
+function AlarmOverlay() {
+  const { t, state, resolveAlarm } = useApp();
+  const active = state.guardian.alarmActive;
+  if (!active) return null;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gradient-to-br from-danger-600 via-danger-500 to-accent-500 p-5 pop">
+      <div className="w-full max-w-md text-center text-white">
+        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-white/20 text-6xl shadow-lift ring-4 ring-white/30 pulse-soft">
+          🚨
+        </div>
+        <h2 className="mt-6 text-3xl font-extrabold leading-tight">{t('safety.alarm.title')}</h2>
+        <p className="mt-2 text-lg font-semibold text-white/90">{t('safety.alarm.desc')}</p>
+        <button
+          onClick={() => resolveAlarm()}
+          className="mt-8 w-full rounded-3xl bg-white px-8 py-5 text-xl font-extrabold text-brand-800 shadow-lift transition hover:bg-brand-50"
+        >
+          ✅ {t('safety.ok')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // Caregiver shell — desk-friendly side navigation.
 // ============================================================================
 
@@ -142,6 +173,7 @@ const CAREGIVER_NAV = [
   { to: '/caregiver', label: 'cg.overview', Icon: GridIcon, end: true },
   { to: '/caregiver/patients', label: 'cg.patients', Icon: UserIcon },
   { to: '/caregiver/insights', label: 'cg.insights', Icon: LightbulbIcon },
+  { to: '/caregiver/location', label: 'guardian.cg.nav', Icon: ShieldIcon },
   { to: '/caregiver/alerts', label: 'cg.alerts', Icon: AlertIcon },
   { to: '/caregiver/activity', label: 'cg.activity', Icon: ClockNavIcon },
   { to: '/caregiver/settings', label: 'cg.settings', Icon: ChartIcon },
@@ -152,6 +184,7 @@ const CAREGIVER_PAGE_SPEECH: Record<string, string> = {
   '/caregiver': 'cg.overview',
   '/caregiver/patients': 'cg.patients',
   '/caregiver/insights': 'cg.insights',
+  '/caregiver/location': 'guardian.title',
   '/caregiver/alerts': 'cg.alerts',
   '/caregiver/activity': 'cg.activity',
   '/caregiver/settings': 'cg.settings',

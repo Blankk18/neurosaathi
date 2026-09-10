@@ -19,7 +19,9 @@ import Memories from '@/pages/patient/Memories';
 import Progress from '@/pages/patient/Progress';
 import MoodCheck from '@/pages/patient/MoodCheck';
 import VoiceChat from '@/pages/patient/VoiceChat';
+import Safety from '@/pages/patient/Safety';
 import CaregiverOverview from '@/pages/caregiver/CaregiverOverview';
+import Guardian from '@/pages/caregiver/Guardian';
 import Patients from '@/pages/caregiver/Patients';
 import Insights from '@/pages/caregiver/Insights';
 import Alerts from '@/pages/caregiver/Alerts';
@@ -186,6 +188,16 @@ export default function App() {
           </PatientGate>
         }
       />
+      <Route
+        path="/safety"
+        element={
+          <PatientGate>
+            <PatientShell>
+              <Safety />
+            </PatientShell>
+          </PatientGate>
+        }
+      />
 
       {/* caregiver */}
       <Route
@@ -256,6 +268,18 @@ export default function App() {
           ) : (
             <CaregiverShell>
               <Settings />
+            </CaregiverShell>
+          )
+        }
+      />
+      <Route
+        path="/caregiver/location"
+        element={
+          isElder(state) ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <CaregiverShell>
+              <Guardian />
             </CaregiverShell>
           )
         }

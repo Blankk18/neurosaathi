@@ -23,6 +23,15 @@ export function loadState(): AppState {
       ...base,
       ...parsed,
       settings: { ...base.settings, ...parsed.settings },
+      // Guardian was added in v2 — deep-merge so an older persisted state
+      // (or a partial one) always has every field, and keep seeded safe zones.
+      guardian: {
+        ...base.guardian,
+        ...(parsed.guardian ?? {}),
+        home: parsed.guardian?.home ?? base.guardian.home,
+        safeLocations: parsed.guardian?.safeLocations ?? base.guardian.safeLocations,
+      },
+      emergencyContacts: parsed.emergencyContacts ?? base.emergencyContacts,
     };
     const legacy = parsed.settings as Partial<Settings> & { largeText?: boolean; largeButtons?: boolean };
     if (legacy) {
