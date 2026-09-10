@@ -12,8 +12,15 @@
 // ============================================================================
 
 import * as faceapi from '@vladmandic/face-api';
-import { FACE_MODELS_URL, FACE_MATCH_THRESHOLD, LIVENESS_MIN_MOVEMENT } from './faceRecognition.config';
-import type { FaceAlignment, FaceProfile, FaceSample, RecognitionResult } from './types';
+import {
+  FACE_MODELS_URL,
+  FACE_MATCH_THRESHOLD,
+  LIVENESS_MIN_MOVEMENT,
+  DETECTOR_INPUT_SIZE,
+  DETECTOR_SCORE_THRESHOLD,
+  DETECTOR_SCORE_THRESHOLD_RELAXED,
+} from './faceRecognition.config';
+import type { FaceAlignment, FaceBox, FaceProfile, FaceSample, RecognitionResult } from './types';
 
 const DB_NAME = 'neurosaathi-face-db';
 const DB_STORE = 'profiles';
@@ -91,18 +98,42 @@ export function areModelsLoaded(): boolean {
 export function initFaceModels(): Promise<void> {
   if (modelsPromise) return modelsPromise;
   modelsPromise = (async () => {
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_URL),
-    ]);
-    modelsReady = true;
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_URL),
+      ]);
+      modelsReady = true;
+    } catch (err) {
+      modelsReady = false;
+      modelsPromise = null;
+      throw err; // Re-throw so callers see the failure
+    }
   })();
-  modelsPromise.catch(() => {
+  modelsPromise.catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[face] model loading failed:', err);
     modelsReady = false;
     modelsPromise = null;
   });
   return modelsPromise;
+}
+
+/** Get primary detector options for face detection. */
+export function getPrimaryDetectorOptions(): faceapi.TinyFaceDetectorOptions {
+  return new faceapi.TinyFaceDetectorOptions({
+    inputSize: DETECTOR_INPUT_SIZE,
+    scoreThreshold: DETECTOR_SCORE_THRESHOLD,
+  });
+}
+
+/** Get relaxed detector options for fallback when primary detection fails repeatedly. */
+export function getRelaxedDetectorOptions(): faceapi.TinyFaceDetectorOptions {
+  return new faceapi.TinyFaceDetectorOptions({
+    inputSize: DETECTOR_INPUT_SIZE,
+    scoreThreshold: DETECTOR_SCORE_THRESHOLD_RELAXED,
+  });
 }
 
 // ----------------------------------------------------------------------------
@@ -158,10 +189,22 @@ export async function analyzeFrame(
   detectorOptions: faceapi.TinyFaceDetectorOptions,
 ): Promise<DetectedFace[] | null> {
   try {
-    return await faceapi.detectAllFaces(video, detectorOptions).withFaceLandmarks().withFaceDescriptors();
-  } catch {
+    const result = await faceapi
+      .detectAllFaces(video, detectorOptions)
+      .withFaceLandmarks()
+      .withFaceDescriptors();
+    return result as DetectedFace[];
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[face] analyzeFrame error:', err);
     return null;
   }
+}
+
+/** Bounding box in video pixel coordinates for overlay rendering. */
+export function faceBoxFor(face: DetectedFace): FaceBox {
+  const b = face.detection.box;
+  return { x: b.x, y: b.y, width: b.width, height: b.height, score: face.detection.score };
 }
 
 /** Infer a crude alignment from the first face (real landmark-based guidance). */
@@ -183,7 +226,9 @@ export function alignmentFor(face: DetectedFace, frameW: number): FaceAlignment 
 
 /** True when the face is centred, upright and a comfortable size. */
 export function isWellAligned(a: FaceAlignment): boolean {
-  return Math.abs(a.x) < 0.18 && Math.abs(a.y) < 0.28 && a.size > 0.12 && a.size < 0.55;
+  // Relaxed thresholds: allow more tilt/offset so valid faces are not rejected.
+  // Increased tolerance on x/y and widened size range.
+  return Math.abs(a.x) < 0.45 && Math.abs(a.y) < 0.5 && a.size > 0.06 && a.size < 0.7;
 }
 
 /** Small O(n) euclidean distance used for descriptor comparison. */
@@ -213,11 +258,11 @@ function descriptorLowestDistance(candidate: Float32Array, samples: FaceSample[]
  */
 export function matchesProfile(descriptor: Float32Array, profile: FaceProfile): RecognitionResult {
   if (!profile.enrolled || profile.samples.length === 0) {
-    return { ok: false, confidence: 0 };
+    return { ok: false, confidence: 0, distance: Infinity };
   }
   const distance = descriptorLowestDistance(descriptor, profile.samples);
   const confidence = Math.max(0, Math.min(1, 1 - distance / 1.5));
-  return { ok: distance < FACE_MATCH_THRESHOLD, confidence };
+  return { ok: distance < FACE_MATCH_THRESHOLD, confidence, distance };
 }
 
 /** Liveness: did the face landmark centre move more than the minimum? */
@@ -270,7 +315,7 @@ export function buildFaceProfile(samples: FaceSample[], patientId?: string): Fac
 export function alignmentHint(a: FaceAlignment): string | null {
   if (Math.abs(a.x) > 0.35) return a.x < 0 ? 'moveRight' : 'moveLeft';
   if (a.y < -0.35) return 'moveDown';
-  if (a.size < 0.12) return 'moveCloser';
-  if (a.size > 0.55) return 'moveBack';
+  if (a.size < 0.08) return 'moveCloser';
+  if (a.size > 0.6) return 'moveBack';
   return null;
 }

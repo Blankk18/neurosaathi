@@ -13,10 +13,18 @@ export type FaceLoginState =
   | 'loadingModels'
   | 'requestingCamera'
   | 'cameraReady'
+  | 'noCamera'
   | 'detecting'
+  | 'noFace'
   | 'faceDetected'
+  | 'tooFar'
+  | 'tooClose'
+  | 'multipleFaces'
   | 'guiding'
+  | 'verifying'
   | 'matching'
+  | 'match'
+  | 'noMatch'
   | 'liveness'
   | 'success'
   | 'failure'
@@ -49,6 +57,16 @@ export interface FaceAlignment {
   quality: number;
 }
 
+/** Pixel bounding box of the detected face in video coordinates. */
+export interface FaceBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** detection confidence 0..1 */
+  score: number;
+}
+
 /** A stored face descriptor + the moment it was captured. */
 export interface FaceSample {
   descriptor: number[]; // 128-dim
@@ -69,4 +87,6 @@ export interface RecognitionResult {
   ok: boolean;
   /** 0..1 confidence (1 - distance), used for a gentle progress feel. */
   confidence: number;
+  /** raw euclidean distance for debug display */
+  distance: number;
 }

@@ -8,6 +8,10 @@
 // IMPORTANT: authentication is never faked. A login only occurs after a real
 // descriptor comparison that yields REQUIRED_CONSECUTIVE_MATCHES consecutive
 // matching recycle cycles — never from a timer or a hardcoded callback.
+//
+// Loop architecture: requestAnimationFrame + timestamp throttle (~200 ms) so
+// we never run inference on every browser frame nor allow overlapping calls
+// (isProcessingRef guards it). Falls back gracefully if the tab is throttled.
 // ============================================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,6 +23,10 @@ import {
   LIVENESS_ENABLED,
   LIVENESS_SAMPLES,
   CAMERA_CONSTRAINTS,
+  DETECTOR_INPUT_SIZE,
+  DETECTOR_SCORE_THRESHOLD,
+  DETECTOR_SCORE_THRESHOLD_RELAXED,
+  DETECTOR_RELAX_AFTER_FRAMES,
 } from './faceRecognition.config';
 import {
   initFaceModels,
@@ -27,17 +35,12 @@ import {
   releaseVideo,
   analyzeFrame,
   alignmentFor,
+  faceBoxFor,
   isWellAligned,
   matchesProfile,
   movementDetected,
 } from './faceRecognition.service';
-import type {
-  FaceAlignment,
-  FaceLoginState,
-  FaceProfile,
-  FaceSample,
-  FaceStatusInfo,
-} from './types';
+import type { FaceAlignment, FaceBox, FaceLoginState, FaceProfile, FaceSample, FaceStatusInfo } from './types';
 
 export interface FaceHookOptions {
   /** Enrolled profile to match against — null during enrollment. */
@@ -52,18 +55,21 @@ export interface FaceHookResult {
   state: FaceLoginState;
   status: FaceStatusInfo;
   videoRef: React.MutableRefObject<HTMLVideoElement | null>;
-  /** true while a face is present at all. */
   live: boolean;
-  /** raw alignment for the face guide overlay (null when no face). */
   alignment: FaceAlignment | null;
-  /** consecutive matches so far (0..REQUIRED_CONSECUTIVE_MATCHES). */
+  faceBox: FaceBox | null;
+  /** Consecutive matches so far (0..REQUIRED_CONSECUTIVE_MATCHES). */
   matchProgress: number;
-  /** frames processed so far this attempt. */
   attemptCount: number;
   /** 0..1 confidence of the latest matching cycle. */
   confidence: number;
+  /** Last raw distance (for DEV debug). */
+  lastDistance: number | null;
+  /** Last detection score (for DEV debug). */
+  lastScore: number | null;
+  /** Number of faces in last frame (for DEV debug). */
+  lastFaceCount: number;
   cancel: () => void;
-  /** Load models (if needed), then open the camera and start scanning. */
   start: () => void;
   modelsReady: boolean;
 }
@@ -76,18 +82,26 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<faceapi.TinyFaceDetectorOptions | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const relaxedDetectorRef = useRef<faceapi.TinyFaceDetectorOptions | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastTickRef = useRef<number>(0);
+  const isProcessingRef = useRef(false);
   const runningRef = useRef(false);
+  const noFaceFramesRef = useRef(0);
+
   const [modelsReady, setModelsReady] = useState(false);
   const [live, setLive] = useState(false);
   const [alignment, setAlignment] = useState<FaceAlignment | null>(null);
+  const [faceBox, setFaceBox] = useState<FaceBox | null>(null);
   const [matchProgress, setMatchProgress] = useState(0);
   const [attemptCount, setAttemptCount] = useState(0);
   const [confidence, setConfidence] = useState(0);
+  const [lastDistance, setLastDistance] = useState<number | null>(null);
+  const [lastScore, setLastScore] = useState<number | null>(null);
+  const [lastFaceCount, setLastFaceCount] = useState(0);
   const [state, setState] = useState<FaceLoginState>('idle');
   const [status, setStatus] = useState<FaceStatusInfo>({ state: 'idle', key: 'face.cancel' });
 
-  // refs to avoid stale closures inside the interval callback
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const profileRef = useRef(opts.profile);
@@ -111,135 +125,228 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   // Cleanup — MUST always run (auth success, cancel, error, unmount).
   // --------------------------------------------------------------------------
   const cleanup = useCallback(() => {
-    if (timerRef.current != null) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
     runningRef.current = false;
+    isProcessingRef.current = false;
     consecutiveRef.current = 0;
     attemptsRef.current = 0;
+    noFaceFramesRef.current = 0;
     livenessRef.current = { prev: null, count: 0 };
     setMatchProgress(0);
+    setFaceBox(null);
     stopStream(streamRef.current);
     releaseVideo(videoRef.current);
     streamRef.current = null;
   }, []);
 
-  // stop on unmount — no camera running in the background
   useEffect(() => cleanup, [cleanup]);
 
   // --------------------------------------------------------------------------
-  // Recognition loop (throttled: not every browser frame).
+  // Single recognition tick (throttled via rAF, guarded by isProcessingRef).
   // --------------------------------------------------------------------------
   const tick = useCallback(async () => {
+    if (isProcessingRef.current) return;
     const video = videoRef.current;
     const detector = detectorRef.current;
     if (!video || !runningRef.current || !detector) return;
+    // Video must have real dimensions — otherwise face-api silently returns [].
+    if (video.videoWidth === 0 || video.readyState < 2) return;
 
-    const faces = (await analyzeFrame(video, detector)) ?? [];
-    if (!runningRef.current) return; // cancel/cleanup could have happened mid-await
+    isProcessingRef.current = true;
+    try {
+      // Dynamically relax threshold after repeated no-face frames.
+      const useRelaxed = noFaceFramesRef.current >= DETECTOR_RELAX_AFTER_FRAMES;
+      const activeDetector = useRelaxed && relaxedDetectorRef.current ? relaxedDetectorRef.current : detector;
 
-    const count = faces.length;
+      const faces = (await analyzeFrame(video, activeDetector)) ?? [];
+      if (!runningRef.current) return;
 
-    if (count === 0) {
-      setSnap('detecting', 'face.looking');
-      setAlignment(null);
-      setLive(false);
-      consecutiveRef.current = 0;
-      livenessRef.current = { prev: null, count: 0 };
-      return;
-    }
+      const count = faces.length;
+      setLastFaceCount(count);
 
-    if (count > 1) {
-      // multiple faces → STOP authentication
-      setSnap('faceDetected', 'face.multiple');
-      setAlignment(null);
-      consecutiveRef.current = 0;
-      livenessRef.current = { prev: null, count: 0 };
-      return;
-    }
-
-    setLive(true);
-    const face = faces[0];
-    const align = alignmentFor(face, video.videoWidth);
-    setAlignment(align);
-
-    // alignment guidance — driven by the real detected landmarks
-    if (!isWellAligned(align)) {
-      const hint =
-        align.x < -0.35 ? 'moveRight' : align.x > 0.35 ? 'moveLeft' : align.y < -0.35 ? 'moveDown' : align.size < 0.12 ? 'moveCloser' : 'moveBack';
-      setSnap('guiding', 'face.move.into', undefined, { hint });
-      consecutiveRef.current = 0;
-      livenessRef.current = { prev: null, count: 0 };
-      return;
-    }
-
-    // ------------- enrollment path: collect a valid sample -------------
-    if (optsRef.current.enroll) {
-      const lv = livenessRef.current;
-      if (!movementDetected(align, lv.prev)) {
-        setSnap('faceDetected', 'face.hold');
-        lv.prev = align;
+      if (count === 0) {
+        noFaceFramesRef.current += 1;
+        setSnap('detecting', 'face.looking');
+        setAlignment(null);
+        setFaceBox(null);
+        setLive(false);
+        setLastScore(null);
+        consecutiveRef.current = 0;
+        livenessRef.current = { prev: null, count: 0 };
         return;
       }
-      lv.prev = align;
-      setSnap('faceDetected', 'face.capture');
-      optsRef.current.onSample?.(toSample(face.descriptor as Float32Array));
-      return;
-    }
 
-    // ------------- matching path -------------
-    const prof = profileRef.current;
-    if (!prof?.enrolled) {
-      setSnap('failure', 'face.noProfile');
-      return;
-    }
+      // Any detection resets the no-face counter.
+      noFaceFramesRef.current = 0;
 
-    // prototype liveness: gentle movement before final descriptor match
-    if (LIVENESS_ENABLED) {
-      const lv = livenessRef.current;
-      if (lv.count < LIVENESS_SAMPLES) {
-        if (!movementDetected(align, lv.prev)) {
-          setSnap('liveness', 'face.liveness.turn', undefined, { hint: 'moveGently' });
-        } else {
-          lv.count += 1;
+      if (count > 1) {
+        setSnap('faceDetected', 'face.multiple');
+        // Still show the first box so the user understands "extra person".
+        const firstScore = faces[0]?.detection.score ?? null;
+        setLastScore(firstScore);
+        setAlignment(null);
+        setFaceBox(null);
+        consecutiveRef.current = 0;
+        livenessRef.current = { prev: null, count: 0 };
+        return;
+      }
+
+      setLive(true);
+      const face = faces[0];
+      setLastScore(face.detection.score);
+      const box = faceBoxFor(face);
+      setFaceBox(box);
+      const align = alignmentFor(face, video.videoWidth);
+      setAlignment(align);
+
+      // Guidance for extreme misalignment only — not every small offset.
+      // "Too far / too close" is based on size; centering is lenient.
+      const tooFar = align.size < 0.08;
+      const tooClose = align.size > 0.6;
+      if (tooFar) {
+        setSnap('guiding', 'face.tooFar');
+        consecutiveRef.current = 0;
+        return;
+      }
+      if (tooClose) {
+        setSnap('guiding', 'face.tooClose');
+        consecutiveRef.current = 0;
+        return;
+      }
+      // Only block on severe off-centre — isWellAligned is already lenient (0.45 x, 0.5 y).
+      // This hint block only triggers for extreme misalignment beyond isWellAligned.
+      if (!isWellAligned(align)) {
+        const hint =
+          align.x < -0.5 ? 'moveRight' : align.x > 0.5 ? 'moveLeft' : align.y < -0.5 ? 'moveDown' : null;
+        if (hint) {
+          setSnap('guiding', 'face.move.into', undefined, { hint });
+          // Don't reset consecutive on mere guidance — only reset if face truly lost
+          // (handled above when count === 0 or count > 1)
+          return;
         }
+      }
+
+      // ------------- enrollment path: collect a valid sample -------------
+      if (optsRef.current.enroll) {
+        // Enrollment still benefits from a little movement variety.
+        const lv = livenessRef.current;
+        // Accept the first sample without movement, then require movement.
+        const needMovement = attemptsRef.current > 0;
+        if (needMovement && !movementDetected(align, lv.prev)) {
+          setSnap('faceDetected', 'face.hold');
+          lv.prev = align;
+          return;
+        }
+
+        // Additional enrollment validation: reject low quality, face outside frame, low detection score
+        // Quality threshold: alignmentFor returns 0..1, reject below 0.5
+        if (align.quality < 0.5) {
+          setSnap('faceDetected', 'face.lowQuality');
+          lv.prev = align;
+          return;
+        }
+
+        // Face box must be fully inside the video frame (not partially outside)
+        // video.videoWidth / video.videoHeight are the frame dimensions
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (box.x < 0 || box.y < 0 || box.x + box.width > vw || box.y + box.height > vh) {
+          setSnap('faceDetected', 'face.offFrame');
+          lv.prev = align;
+          return;
+        }
+
+        // Detection score must meet the primary threshold (not relaxed)
+        const detectionScore = face.detection.score ?? 0;
+        if (detectionScore < DETECTOR_SCORE_THRESHOLD) {
+          setSnap('faceDetected', 'face.lowScore');
+          lv.prev = align;
+          return;
+        }
+
         lv.prev = align;
+        attemptsRef.current += 1;
+        setAttemptCount(attemptsRef.current);
+        setSnap('faceDetected', 'face.capture');
+        optsRef.current.onSample?.(toSample(face.descriptor as Float32Array));
         return;
       }
-    }
 
-    // real descriptor comparison (never faked)
-    setSnap('matching', 'face.verify');
-    const result = matchesProfile(face.descriptor as Float32Array, prof);
-    setConfidence(result.confidence);
-    attemptsRef.current += 1;
-    setAttemptCount(attemptsRef.current);
+      // ------------- matching path -------------
+      const prof = profileRef.current;
+      if (!prof?.enrolled) {
+        setSnap('failure', 'face.noProfile');
+        return;
+      }
 
-    if (result.ok) {
-      const next = consecutiveRef.current + 1;
-      consecutiveRef.current = next;
-      setMatchProgress(next);
-      if (next >= REQUIRED_CONSECUTIVE_MATCHES) {
-        runningRef.current = false;
-        setSnap('success', 'face.recognized');
-        window.setTimeout(() => optsRef.current.onMatch?.(), 300);
-        cleanup();
-        return;
+      // Prototype liveness: gentle movement — non-blocking once satisfied.
+      // Once we've seen enough movement, we never block matching again.
+      if (LIVENESS_ENABLED) {
+        const lv = livenessRef.current;
+        const livenessSatisfied = lv.count >= LIVENESS_SAMPLES;
+        if (!livenessSatisfied) {
+          if (movementDetected(align, lv.prev)) lv.count += 1;
+          lv.prev = align;
+          // Only block on the first few frames before we've seen movement.
+          // After 2 attempts without liveness, fall through to matching anyway
+          // so a perfectly still user isn't permanently stuck.
+          if (lv.count < LIVENESS_SAMPLES && attemptsRef.current < 2) {
+            setSnap('liveness', 'face.liveness.turn', undefined, { hint: 'moveGently' });
+            return;
+          }
+        }
+        // Liveness satisfied or we've waited long enough — proceed to matching.
       }
-      setSnap('detecting', 'face.keep');
-    } else {
-      consecutiveRef.current = 0;
-      setMatchProgress(0);
-      if (attemptsRef.current >= MAX_RECOGNITION_ATTEMPTS) {
-        setSnap('failure', 'face.tooMany');
-        runningRef.current = false;
-        cleanup();
-        return;
+
+      setSnap('matching', 'face.verify');
+      const result = matchesProfile(face.descriptor as Float32Array, prof);
+      setConfidence(result.confidence);
+      setLastDistance(result.distance);
+      attemptsRef.current += 1;
+      setAttemptCount(attemptsRef.current);
+
+      if (result.ok) {
+        const next = consecutiveRef.current + 1;
+        consecutiveRef.current = next;
+        setMatchProgress(next);
+        if (next >= REQUIRED_CONSECUTIVE_MATCHES) {
+          runningRef.current = false;
+          setSnap('success', 'face.recognized');
+          window.setTimeout(() => optsRef.current.onMatch?.(), 300);
+          cleanup();
+          return;
+        }
+        setSnap('detecting', 'face.keep');
+      } else {
+        consecutiveRef.current = 0;
+        setMatchProgress(0);
+        if (attemptsRef.current >= MAX_RECOGNITION_ATTEMPTS) {
+          setSnap('failure', 'face.tooMany');
+          runningRef.current = false;
+          cleanup();
+          return;
+        }
+        setSnap('failure', 'face.notRecognized', undefined, { hint: 'lookDirect' });
       }
-      setSnap('failure', 'face.notRecognized', undefined, { hint: 'lookDirect' });
+    } finally {
+      isProcessingRef.current = false;
     }
   }, [cleanup, setSnap]);
+
+  // rAF loop — timestamp-throttled
+  const loop = useCallback(
+    (now: number) => {
+      if (!runningRef.current) return;
+      rafRef.current = requestAnimationFrame(loop);
+      if (now - lastTickRef.current < RECOGNITION_INTERVAL_MS) return;
+      lastTickRef.current = now;
+      void tick();
+    },
+    [tick],
+  );
 
   const handleCameraError = useCallback(
     (err: unknown) => {
@@ -257,15 +364,18 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   );
 
   // --------------------------------------------------------------------------
-  // Start: load models → request camera → begin throttled scanning.
+  // Start: load models → request camera → begin rAF scanning.
   // --------------------------------------------------------------------------
   const start = useCallback(() => {
     if (runningRef.current) return;
     attemptsRef.current = 0;
+    noFaceFramesRef.current = 0;
     consecutiveRef.current = 0;
     setMatchProgress(0);
     setAttemptCount(0);
     setConfidence(0);
+    setLastDistance(null);
+    setLastScore(null);
 
     setSnap('loadingModels', 'face.prepare');
 
@@ -273,7 +383,9 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
       try {
         await initFaceModels();
         setModelsReady(true);
-      } catch {
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[face] model init failed:', err);
         setSnap('error', 'face.unavailable');
         return;
       }
@@ -292,23 +404,30 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         try {
           await video.play();
         } catch {
-          /* autoplay may be blocked; scan loop still tries frames */
+          /* autoplay may be blocked; loop still tries frames */
         }
-        detectorRef.current = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+        detectorRef.current = new faceapi.TinyFaceDetectorOptions({
+          inputSize: DETECTOR_INPUT_SIZE,
+          scoreThreshold: DETECTOR_SCORE_THRESHOLD,
+        });
+        relaxedDetectorRef.current = new faceapi.TinyFaceDetectorOptions({
+          inputSize: DETECTOR_INPUT_SIZE,
+          scoreThreshold: DETECTOR_SCORE_THRESHOLD_RELAXED,
+        });
       }
       setSnap('cameraReady', 'face.looking');
       runningRef.current = true;
-      timerRef.current = window.setInterval(() => {
-        void tick();
-      }, RECOGNITION_INTERVAL_MS);
+      lastTickRef.current = performance.now();
+      rafRef.current = requestAnimationFrame(loop);
     };
     void go();
-  }, [handleCameraError, setSnap, tick]);
+  }, [handleCameraError, loop, setSnap]);
 
   const cancel = useCallback(() => {
     cleanup();
     setSnap('idle', 'face.cancel');
     setAlignment(null);
+    setFaceBox(null);
     setLive(false);
   }, [cleanup, setSnap]);
 
@@ -318,9 +437,13 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
     videoRef,
     live,
     alignment,
+    faceBox,
     matchProgress,
     attemptCount,
     confidence,
+    lastDistance,
+    lastScore,
+    lastFaceCount,
     cancel,
     start,
     modelsReady,

@@ -11,16 +11,30 @@ function statusVisual(state: FaceStatusInfo['state']): { emoji: string; textClas
     case 'requestingCamera':
     case 'cameraReady':
       return { emoji: '⏳', textClass: 'text-white/90' };
+    case 'noCamera':
+      return { emoji: '📷', textClass: 'text-amber-200' };
     case 'detecting':
       return { emoji: '👁️', textClass: 'text-white/90' };
+    case 'noFace':
+      return { emoji: '👤', textClass: 'text-amber-200' };
     case 'faceDetected':
       return { emoji: '✅', textClass: 'text-emerald-200' };
+    case 'tooFar':
+      return { emoji: '↗️', textClass: 'text-amber-200' };
+    case 'tooClose':
+      return { emoji: '↙️', textClass: 'text-amber-200' };
+    case 'multipleFaces':
+      return { emoji: '👥', textClass: 'text-amber-200' };
     case 'guiding':
       return { emoji: '↔️', textClass: 'text-amber-200' };
+    case 'verifying':
+      return { emoji: '🔄', textClass: 'text-sky-200' };
+    case 'match':
+      return { emoji: '🎉', textClass: 'text-emerald-200' };
+    case 'noMatch':
+      return { emoji: '😔', textClass: 'text-amber-200' };
     case 'liveness':
       return { emoji: '🔄', textClass: 'text-amber-200' };
-    case 'matching':
-      return { emoji: '🛡️', textClass: 'text-sky-200' };
     case 'success':
       return { emoji: '🎉', textClass: 'text-emerald-200' };
     case 'failure':

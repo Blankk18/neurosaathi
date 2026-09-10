@@ -120,7 +120,7 @@ function LoginCard({ role, emoji, focus, onFocus, onFace }: LoginCardProps) {
         🔓 {t('common.start')}
       </button>
 
-      {isElder && onFace && (
+      {onFace && (
         <button
           type="button"
           onClick={onFace}
@@ -137,7 +137,7 @@ export default function Login() {
   const { state, t, dispatch, speakText } = useApp();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [faceOpen, setFaceOpen] = useState(false);
+  const [faceOpen, setFaceOpen] = useState(params.get('face') === '1' || params.get('face') === 'true');
   const preset = params.get('role');
   // Arriving from Landing ("Continue as …") carries a role param: show only
   // that role's login card. Without a param (e.g. session-guard redirects)
@@ -145,6 +145,7 @@ export default function Login() {
   const single = preset === 'elder' || preset === 'caregiver';
   const role: Role = preset === 'caregiver' ? 'caregiver' : 'elder';
   const [focus, setFocus] = useState<Role>(role);
+  const [faceRole, setFaceRole] = useState<Role>(role);
 
   const speakPrompt = (r: Role) => {
     const titleKey = r === 'elder' ? 'login.elder.title' : 'login.caregiver.title';
@@ -153,13 +154,15 @@ export default function Login() {
     setFocus(r);
   };
 
-  // Face Login success → authenticate the elder (never faked — only called after
-  // a real descriptor match in FaceLogin).
+  // Face Login success → authenticate the role (elder or caregiver)
   const handleFaceSuccess = () => {
-    speakText(`${t('login.patient.name')}. ${t('login.success.elder')}`);
-    dispatch({ type: 'SET_ROLE', role: 'elder' });
-    if (!state.patient?.onboarded) navigate('/onboarding');
-    else navigate('/home');
+    const r = faceRole;
+    const msg = r === 'elder' ? t('login.success.elder') : t('login.success.caregiver');
+    speakText(`${t('login.patient.name')}. ${msg}`);
+    dispatch({ type: 'SET_ROLE', role: r });
+    if (r === 'elder' && !state.patient?.onboarded) navigate('/onboarding');
+    else if (r === 'elder') navigate('/home');
+    else navigate('/caregiver');
   };
 
   return (
@@ -237,7 +240,10 @@ export default function Login() {
                           emoji="👵"
                           focus={focus === 'elder'}
                           onFocus={() => setFocus('elder')}
-                          onFace={() => setFaceOpen(true)}
+                          onFace={() => {
+                            setFaceRole('elder');
+                            setFaceOpen(true);
+                          }}
                         />
                       ) : (
                         <LoginCard
@@ -245,6 +251,10 @@ export default function Login() {
                           emoji="👨‍👩‍👧"
                           focus={focus === 'caregiver'}
                           onFocus={() => speakPrompt('caregiver')}
+                          onFace={() => {
+                            setFaceRole('caregiver');
+                            setFaceOpen(true);
+                          }}
                         />
                       )}
                     </div>
@@ -252,17 +262,24 @@ export default function Login() {
                 ) : (
                   <div className="grid gap-5">
                     <LoginCard
-                        role="elder"
-                        emoji="👵"
-                        focus={focus === 'elder'}
-                        onFocus={() => setFocus('elder')}
-                        onFace={() => setFaceOpen(true)}
-                      />
+                      role="elder"
+                      emoji="👵"
+                      focus={focus === 'elder'}
+                      onFocus={() => setFocus('elder')}
+                      onFace={() => {
+                        setFaceRole('elder');
+                        setFaceOpen(true);
+                      }}
+                    />
                     <LoginCard
                       role="caregiver"
                       emoji="👨‍👩‍👧"
                       focus={focus === 'caregiver'}
                       onFocus={() => speakPrompt('caregiver')}
+                      onFace={() => {
+                        setFaceRole('caregiver');
+                        setFaceOpen(true);
+                      }}
                     />
                   </div>
                 )}

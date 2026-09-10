@@ -109,7 +109,21 @@ export function FaceEnrollment({
             </button>
           </div>
         ) : (
-          <LiveFaceScanner videoRef={face.videoRef} status={face.status} alignment={face.alignment}>
+          <LiveFaceScanner
+            videoRef={face.videoRef}
+            status={face.status}
+            alignment={face.alignment}
+            faceBox={face.faceBox}
+            debug={{
+              lastFaceCount: face.lastFaceCount,
+              lastScore: face.lastScore,
+              lastDistance: face.lastDistance,
+              confidence: face.confidence,
+              matchProgress: face.matchProgress,
+              attemptCount: face.attemptCount,
+              modelsReady: face.modelsReady,
+            }}
+          >
             <div className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-1" role="progressbar" aria-valuemin={0} aria-valuemax={ENROLLMENT_SAMPLES} aria-valuenow={collected}>
                 {Array.from({ length: ENROLLMENT_SAMPLES }).map((_, i) => (
