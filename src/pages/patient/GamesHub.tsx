@@ -7,7 +7,6 @@ import type { GameKind } from '@/types';
 import {
   SparkleIcon,
   BrainIcon,
-  CameraIcon,
   TargetIcon,
   ClockIcon,
   UsersIcon,
@@ -20,7 +19,8 @@ import {
 
 const GAME_ICONS: Record<GameKind, typeof BrainIcon> = {
   'memory-match': BrainIcon,
-  'scene-memory': CameraIcon,
+  // legacy — kept only to satisfy the exhaustive GameKind type; no hub card uses it.
+  'scene-memory': BrainIcon,
   pattern: TargetIcon,
   routine: ClockIcon,
   'family-memory': UsersIcon,
@@ -29,7 +29,6 @@ const GAME_ICONS: Record<GameKind, typeof BrainIcon> = {
 
 const GAMES: { game: GameKind; route: string; titleKey: string; descKey: string }[] = [
   { game: 'memory-match', route: '/games/memory', titleKey: 'games.memory', descKey: 'games.memory.desc' },
-  { game: 'scene-memory', route: '/games/scene', titleKey: 'games.scene', descKey: 'games.scene.desc' },
   { game: 'pattern', route: '/games/pattern', titleKey: 'games.pattern', descKey: 'games.pattern.desc' },
   { game: 'routine', route: '/games/routine', titleKey: 'games.routine', descKey: 'games.routine.desc' },
   { game: 'family-memory', route: '/games/family', titleKey: 'games.family', descKey: 'games.family.desc' },
@@ -74,7 +73,31 @@ export default function GamesHub() {
         </SectionTitle>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {GAMES.map(({ game, route, titleKey, descKey }) => {
+          {/* Flagship: Family Memory Challenge — prominent, warm, full width */}
+          <Card
+            onClick={() => navigate('/games/family')}
+            className="group relative col-span-full flex flex-col items-start gap-3 overflow-hidden border-0 bg-gradient-to-br from-warm-50 via-brand-50 to-white p-6 transition-all hover:-translate-y-0.5 hover:shadow-lift"
+          >
+            <div className="absolute right-4 top-4 flex items-center gap-1.5" aria-hidden>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-extrabold text-brand-700 shadow-card">✨ {t('family.challenge.tag.personalized')}</span>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-extrabold text-warm-700 shadow-card">🧩 {t('family.challenge.tag.adaptive')}</span>
+            </div>
+            <span className="inline-flex rounded-2xl bg-white p-3 text-brand-700 shadow-card transition-colors group-hover:bg-brand-100">
+              <UsersIcon size={30} />
+            </span>
+            <span className="rounded-full bg-accent-400/90 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-white">
+              {t('family.challenge.eyebrow')}
+            </span>
+            <div className="space-y-1.5">
+              <h3 className="text-2xl font-extrabold tracking-tight text-brand-900">{t('family.challenge.title')}</h3>
+              <p className="max-w-[34ch] text-base font-semibold text-brand-700/90">{t('family.challenge.subtitle')}</p>
+            </div>
+            <span className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-4 text-lg font-extrabold text-white shadow-card transition-colors group-hover:bg-brand-700">
+              🧭 {t('family.challenge.cta')} <PlayIcon size={18} />
+            </span>
+          </Card>
+
+          {GAMES.filter((g) => g.game !== 'family-memory').map(({ game, route, titleKey, descKey }) => {
             const recent = recentForGame(state.gameResults, game);
             const prev = currentDifficulty(state.gameResults, game, 1);
             const d = adaptDifficulty(prev, recent);

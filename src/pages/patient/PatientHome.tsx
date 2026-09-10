@@ -21,15 +21,15 @@ import {
 } from '@/components/Icons';
 
 const ACTIVITIES: { game: GameKind; emoji: string; labelKey: string }[] = [
-  { game: 'memory-match', emoji: '🧠', labelKey: 'games.memory' },
-  { game: 'scene-memory', emoji: '🖼️', labelKey: 'games.scene' },
-  { game: 'routine', emoji: '🕰️', labelKey: 'games.routine' },
   { game: 'family-memory', emoji: '👨‍👩‍👧', labelKey: 'games.family' },
+  { game: 'memory-match', emoji: '🧠', labelKey: 'games.memory' },
+  { game: 'routine', emoji: '🕰️', labelKey: 'games.routine' },
 ];
 
 const GAME_ROUTE: Record<GameKind, string> = {
   'memory-match': '/games/memory',
-  'scene-memory': '/games/scene',
+  // legacy — kept only to satisfy the exhaustive GameKind type; no UI surfaces it.
+  'scene-memory': '/games/family',
   pattern: '/games/pattern',
   routine: '/games/routine',
   'family-memory': '/games/family',
@@ -158,6 +158,19 @@ export default function PatientHome() {
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-extrabold leading-tight text-brand-900 sm:text-lg">{t('home.mood.checkin')}</span>
             <span className="text-xs font-bold text-brand-500 sm:text-sm">How are you?</span>
+          </span>
+        </button>
+        <button
+          onClick={() => navigate('/face-setup')}
+          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift sm:p-5"
+          aria-label={t('face.setup.button')}
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 transition group-hover:bg-brand-100">
+            <span className="text-xl" aria-hidden>🛡️</span>
+          </span>
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-base font-extrabold leading-tight text-brand-900 sm:text-lg">{t('face.setup.button')}</span>
+            <span className="text-xs font-bold text-brand-500 sm:text-sm">Sign in with your face</span>
           </span>
         </button>
       </div>

@@ -14,7 +14,8 @@ interface Msg {
 
 const GAME_ROUTE: Record<GameKind, string> = {
   'memory-match': '/games/memory',
-  'scene-memory': '/games/scene',
+  // legacy — kept only to satisfy the exhaustive GameKind type; no UI surfaces it.
+  'scene-memory': '/games/family',
   pattern: '/games/pattern',
   routine: '/games/routine',
   'family-memory': '/games/family',

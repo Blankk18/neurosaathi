@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { LanguageSelector } from '@/components/common';
+import { FaceLogin } from '@/face/FaceLogin';
 import type { Role } from '@/types';
 
 // ============================================================================
@@ -18,9 +19,10 @@ interface LoginCardProps {
   emoji: string;
   focus: boolean;
   onFocus: () => void;
+  onFace?: () => void;
 }
 
-function LoginCard({ role, emoji, focus, onFocus }: LoginCardProps) {
+function LoginCard({ role, emoji, focus, onFocus, onFace }: LoginCardProps) {
   const { t, state, dispatch, speakText } = useApp();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
@@ -117,13 +119,25 @@ function LoginCard({ role, emoji, focus, onFocus }: LoginCardProps) {
       >
         🔓 {t('common.start')}
       </button>
+
+      {isElder && onFace && (
+        <button
+          type="button"
+          onClick={onFace}
+          className="mt-1 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-brand-50/60 px-4 py-3 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card"
+        >
+          🛡️ {t('face.login.button')}
+        </button>
+      )}
     </form>
   );
 }
 
 export default function Login() {
-  const { t, speakText } = useApp();
+  const { state, t, dispatch, speakText } = useApp();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
+  const [faceOpen, setFaceOpen] = useState(false);
   const preset = params.get('role');
   // Arriving from Landing ("Continue as …") carries a role param: show only
   // that role's login card. Without a param (e.g. session-guard redirects)
@@ -137,6 +151,15 @@ export default function Login() {
     const hintKey = r === 'elder' ? 'login.elder.hint' : 'login.caregiver.hint';
     speakText(`${t('login.choose')}. ${t(titleKey)}. ${t('login.patient.name')}. ${t(hintKey)}`);
     setFocus(r);
+  };
+
+  // Face Login success → authenticate the elder (never faked — only called after
+  // a real descriptor match in FaceLogin).
+  const handleFaceSuccess = () => {
+    speakText(`${t('login.patient.name')}. ${t('login.success.elder')}`);
+    dispatch({ type: 'SET_ROLE', role: 'elder' });
+    if (!state.patient?.onboarded) navigate('/onboarding');
+    else navigate('/home');
   };
 
   return (
@@ -209,7 +232,13 @@ export default function Login() {
                   <div className="flex justify-center">
                     <div className="w-full max-w-md">
                       {role === 'elder' ? (
-                        <LoginCard role="elder" emoji="👵" focus={focus === 'elder'} onFocus={() => setFocus('elder')} />
+                        <LoginCard
+                          role="elder"
+                          emoji="👵"
+                          focus={focus === 'elder'}
+                          onFocus={() => setFocus('elder')}
+                          onFace={() => setFaceOpen(true)}
+                        />
                       ) : (
                         <LoginCard
                           role="caregiver"
@@ -222,7 +251,13 @@ export default function Login() {
                   </div>
                 ) : (
                   <div className="grid gap-5">
-                    <LoginCard role="elder" emoji="👵" focus={focus === 'elder'} onFocus={() => setFocus('elder')} />
+                    <LoginCard
+                        role="elder"
+                        emoji="👵"
+                        focus={focus === 'elder'}
+                        onFocus={() => setFocus('elder')}
+                        onFace={() => setFaceOpen(true)}
+                      />
                     <LoginCard
                       role="caregiver"
                       emoji="👨‍👩‍👧"
@@ -254,6 +289,13 @@ export default function Login() {
           </div>
         </div>
       </main>
+
+      <FaceLogin
+        open={faceOpen}
+        onClose={() => setFaceOpen(false)}
+        onSuccess={handleFaceSuccess}
+        onUsePin={() => setFaceOpen(false)}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useApp } from '@/state/AppContext';
 import { Card, Button, Toggle, SectionTitle } from '@/components/ui';
 import { AccessibilityControls, LanguageSelector } from '@/components/common';
 import { ChevronRightIcon } from '@/components/Icons';
+import { resetFaceProfile } from '@/face/faceRecognition.service';
 
 export default function Settings() {
   const { t, state, dispatch, runSync, resetAll, speakText } = useApp();
@@ -127,6 +128,17 @@ export default function Settings() {
               </Button>
             </div>
           )}
+
+          {/* demo-only quiet control: erase the enrolled face profile */}
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-warm-50/60 px-4 py-3">
+            <div>
+              <div className="text-sm font-extrabold text-brand-800">{t('face.title')}</div>
+              <div className="text-xs font-semibold text-neutral-500">{t('face.reset')}</div>
+            </div>
+            <Button variant="ghost" onClick={() => { void resetFaceProfile(); }}>
+              {t('face.reset')}
+            </Button>
+          </div>
         </Card>
       </div>
     </div>

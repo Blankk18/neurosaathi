@@ -196,6 +196,18 @@ export interface Reminder {
   history: { date: string; status: ReminderStatus }[];
 }
 
+export type MemoryCategory =
+  | 'childhood'
+  | 'family'
+  | 'festival'
+  | 'birthday'
+  | 'school'
+  | 'travel'
+  | 'home'
+  | 'wedding'
+  | 'friends'
+  | 'place';
+
 export interface FamilyMemory {
   id: string;
   patientId: string;
@@ -206,6 +218,19 @@ export interface FamilyMemory {
   birthday?: string;
   notes: string;
   createdAt: string;
+
+  // FAMILY MEMORY CHALLENGE — optional rich metadata (set by the caregiver or by
+  // the demo dataset). When present, the challenge can ask about people, places,
+  // events and time instead of only "who is this?".
+  people?: string[];
+  relationships?: string[];
+  place?: string;
+  year?: number;
+  event?: string;
+  description?: string;
+  category?: MemoryCategory;
+  difficulty?: number;
+  tags?: string[];
 }
 
 export interface MoodEntry {

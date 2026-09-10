@@ -28,15 +28,14 @@ NeuroSaathi focuses on making technology:
 
 ## 🎮 Cognitive Activities
 
-NeuroSaathi currently includes six activity types:
+NeuroSaathi currently includes these activity types:
 
 | Activity | Purpose |
 |---|---|
+| 👨‍👩‍👧 Family Memory Challenge | A premium "remember together" journey: photos of people, places and moments with gentle questions, hints, confidence and spaced reinforcement |
 | 🧠 Memory Match | Match familiar objects and build memory engagement |
-| 🖼️ Scene Memory | Observe a scene and recall its details |
 | 🧩 Pattern Game | Identify patterns and exercise attention |
 | 🕰️ Routine Recall | Remember familiar daily routines |
-| 👨‍👩‍👧 Family Memories | Recall information about family members |
 | 🏡 Region Memories | Use culturally familiar regional objects and scenes |
 
 Each completed session records:
@@ -111,3 +110,27 @@ Adaptive engine
 │ Increase      │ Maintain      │ Decrease      │
 │ difficulty    │ difficulty    │ difficulty    │
 └───────────────┴───────────────┴───────────────┘
+
+---
+
+## 👨‍👩‍👧 Family Memory Challenge
+
+The family activity was rebuilt into a warm, premium **memory journey** (replacing the old
+"Remember the Scene" quiz experience on the patient-facing side):
+
+- **Own a journey, not a quiz** — observe a photo → answer a gentle question → supportive
+  feedback → reveal the memory → next. No countdown, no "wrong/failure" language.
+- **9 question types** — who, relationship, where, when (approximate), event, who-was-with-you,
+  plus *visual-location* (🏠/🏫/🌳/🛕 cards), *memory sequence* (what happened first) and
+  *then-vs-now*.
+- **Interesting, believable demo memories** — a single fictional family's life story (1990–2022)
+  across childhood, festivals, birthdays, school, travel, weddings, home, friends and places.
+  Each photo is a locally generated SVG data-URI (no image API, no text overlays, fully offline).
+- **4-level progressive hints** and optional **confidence** ("How sure are you?"), both recorded.
+- **Spaced reinforcement** — weak memories (wrong or unsure) are offered again via a
+  "Practice These Memories" action, labelled as a memory journey, never as treatment.
+- Reuses the existing adaptive engine + `useGameSession('family-memory')`; every session reports
+  accuracy, response time, mistakes, hints and confidence to the caregiver dashboard.
+- A **"How it works"** intro, tap-to-enlarge photos, optional voice read-aloud, a shared i18n
+  dictionary (English / Hindi / Gujarati), and elderly-friendly accessibility (large type &
+  buttons, keyboard & screen-reader friendly, no colour-only meaning).

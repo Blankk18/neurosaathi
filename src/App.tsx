@@ -9,7 +9,6 @@ import Baseline from '@/pages/Baseline';
 import PatientHome from '@/pages/patient/PatientHome';
 import GamesHub from '@/pages/patient/GamesHub';
 import MemoryMatch from '@/pages/patient/games/MemoryMatch';
-import SceneMemory from '@/pages/patient/games/SceneMemory';
 import PatternGame from '@/pages/patient/games/PatternGame';
 import RoutineRecall from '@/pages/patient/games/RoutineRecall';
 import FamilyMemoryGame from '@/pages/patient/games/FamilyMemoryGame';
@@ -20,10 +19,12 @@ import Progress from '@/pages/patient/Progress';
 import MoodCheck from '@/pages/patient/MoodCheck';
 import VoiceChat from '@/pages/patient/VoiceChat';
 import Safety from '@/pages/patient/Safety';
+import FaceSetup from '@/pages/patient/FaceSetup';
 import CaregiverOverview from '@/pages/caregiver/CaregiverOverview';
 import Guardian from '@/pages/caregiver/Guardian';
 import Patients from '@/pages/caregiver/Patients';
 import Insights from '@/pages/caregiver/Insights';
+import FamilyMemories from '@/pages/caregiver/FamilyMemories';
 import Alerts from '@/pages/caregiver/Alerts';
 import Activity from '@/pages/caregiver/Activity';
 import Settings from '@/pages/caregiver/Settings';
@@ -84,16 +85,6 @@ export default function App() {
           <PatientGate>
             <PatientShell>
               <MemoryMatch />
-            </PatientShell>
-          </PatientGate>
-        }
-      />
-      <Route
-        path="/games/scene"
-        element={
-          <PatientGate>
-            <PatientShell>
-              <SceneMemory />
             </PatientShell>
           </PatientGate>
         }
@@ -198,6 +189,16 @@ export default function App() {
           </PatientGate>
         }
       />
+      <Route
+        path="/face-setup"
+        element={
+          <PatientGate>
+            <PatientShell>
+              <FaceSetup />
+            </PatientShell>
+          </PatientGate>
+        }
+      />
 
       {/* caregiver */}
       <Route
@@ -232,6 +233,18 @@ export default function App() {
           ) : (
             <CaregiverShell>
               <Insights />
+            </CaregiverShell>
+          )
+        }
+      />
+      <Route
+        path="/caregiver/memories"
+        element={
+          isElder(state) ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <CaregiverShell>
+              <FamilyMemories />
             </CaregiverShell>
           )
         }
