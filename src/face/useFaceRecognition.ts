@@ -74,8 +74,60 @@ export interface FaceHookResult {
   modelsReady: boolean;
 }
 
-function toSample(desc: Float32Array): FaceSample {
-  return { descriptor: Array.from(desc), capturedAt: Date.now() };
+function toSample(desc: Float32Array, imageBlob?: Blob): FaceSample {
+  return { descriptor: Array.from(desc), capturedAt: Date.now(), imageBlob };
+}
+
+/**
+ * Capture the current video frame as a JPEG Blob.
+ * Called at the exact moment an enrollment sample descriptor is accepted,
+ * so the image corresponds 1-to-1 with each face descriptor.
+ * Returns undefined on any failure — callers treat missing blobs as non-fatal
+ * but the enrollment UI will warn if blobs cannot be obtained.
+ */
+async function captureFrameAsBlob(
+  video: HTMLVideoElement,
+  quality = 0.85,
+): Promise<Blob | undefined> {
+  try {
+    // Video must be in a state where frame data is available.
+    // readyState < 2 means no frame yet (HAVE_NOTHING or HAVE_METADATA only).
+    if (video.readyState < 2) {
+      // eslint-disable-next-line no-console
+      console.warn(`[captureFrameAsBlob] readyState=${video.readyState} < 2 — no frame data available yet`);
+      return undefined;
+    }
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[captureFrameAsBlob] videoWidth or videoHeight is 0 — cannot capture frame');
+      return undefined;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      // eslint-disable-next-line no-console
+      console.warn('[captureFrameAsBlob] Could not get 2d canvas context');
+      return undefined;
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | undefined>((resolve) => {
+      canvas.toBlob((b) => resolve(b ?? undefined), 'image/jpeg', quality);
+    });
+    if (!blob || blob.size === 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[captureFrameAsBlob] canvas.toBlob returned null or zero-byte blob');
+      return undefined;
+    }
+    // eslint-disable-next-line no-console
+    console.info(`[captureFrameAsBlob] Captured blob — size=${blob.size}, type=${blob.type}`);
+    return blob;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[captureFrameAsBlob] Exception during frame capture:', err);
+    return undefined;
+  }
 }
 
 export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
@@ -271,7 +323,12 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         attemptsRef.current += 1;
         setAttemptCount(attemptsRef.current);
         setSnap('faceDetected', 'face.capture');
-        optsRef.current.onSample?.(toSample(face.descriptor as Float32Array));
+
+        // Capture the video frame as a Blob at this exact moment —
+        // the same frame that produced this descriptor. Non-fatal if capture
+        // fails (imageBlob will be undefined; FaceEnrollment checks completeness).
+        const imageBlob = await captureFrameAsBlob(video);
+        optsRef.current.onSample?.(toSample(face.descriptor as Float32Array, imageBlob));
         return;
       }
 
@@ -337,10 +394,17 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   }, [cleanup, setSnap]);
 
   // rAF loop — timestamp-throttled
+  // Guard: check runningRef BEFORE reading lastTickRef to avoid a stale
+  // performance measurement that triggers face-api's internal startTime
+  // error when cancel() fires while a tick is mid-flight.
   const loop = useCallback(
     (now: number) => {
       if (!runningRef.current) return;
       rafRef.current = requestAnimationFrame(loop);
+      // Safety: if lastTickRef is somehow NaN/Infinity, reset it
+      if (!isFinite(lastTickRef.current)) {
+        lastTickRef.current = now;
+      }
       if (now - lastTickRef.current < RECOGNITION_INTERVAL_MS) return;
       lastTickRef.current = now;
       void tick();

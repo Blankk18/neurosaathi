@@ -296,6 +296,7 @@ export default function FaceRecognition() {
       {/* Enrollment Modal */}
       <FaceEnrollment
         open={showEnroll}
+        elderId={state.patient?.id}
         onClose={() => setShowEnroll(false)}
         onEnrolled={() => {
           setShowEnroll(false);

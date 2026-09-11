@@ -1,12 +1,31 @@
+// ============================================================================
+// ONBOARDING — Face-First Elder Registration
+//
+// Flow when arriving via /onboarding?register=1 (from Login "Register" button):
+//   1. Mount: supabase.auth.signInAnonymously() → authUserId
+//             Insert profiles row immediately (no email, no password)
+//   2. Steps 1-5: name, age, language, caregiver, voice preference
+//   3. Step 5 complete: saveElderProfile() → elderId (Supabase UUID)
+//                       dispatch COMPLETE_ONBOARDING(patient.id = elderId)
+//                       showFaceEnrollment = true (mandatory)
+//   4. FaceEnrollment modal: real camera, 10 samples → Supabase face_enrollments
+//   5. On enrolled: navigate to /home — registration complete ✅
+//
+// No email. No password. Anywhere.
+// ============================================================================
+
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { Button } from '@/components/ui';
 import { languageNames } from '@/i18n';
 import { speak } from '@/services/voice';
-import type { LanguageCode, ReminderType } from '@/types';
+import type { LanguageCode, Region, ReminderType } from '@/types';
 import { uid } from '@/data/demoData';
 import { ShieldIcon, CheckIcon, SpeakerIcon, HeartIcon } from '@/components/Icons';
+import { signInAnonymouslyAndCreateProfile, saveElderProfile, getElderProfileById } from '@/services/authService';
+import { supabase } from '@/services/supabase';
+import { FaceEnrollment } from '@/face/FaceEnrollment';
 
 const REMINDER_OPTIONS: { key: ReminderType; emoji: string }[] = [
   { key: 'medicine', emoji: '💊' },
@@ -22,6 +41,10 @@ const INTERESTS = ['🫖 Tea', '🌸 Flowers', '🎶 Music', '📿 Worship', '�
 export default function Onboarding() {
   const { t, dispatch, state } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isRegistering = searchParams.get('register') === '1';
+
+  // Steps 1-5 (no step 0 — anonymous signIn happens on mount)
   const [step, setStep] = useState(1);
   const [name, setName] = useState(state.patient?.name ?? '');
   const [age, setAge] = useState(state.patient?.age ? String(state.patient.age) : '');
@@ -32,21 +55,89 @@ export default function Onboarding() {
   const [interests, setInterests] = useState<string[]>(state.patient?.interests ?? []);
   const [speakSel, setSpeakSel] = useState<'yes' | 'no' | null>(null);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Anonymous auth state (only relevant when isRegistering)
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(isRegistering);
+  const [authError, setAuthError] = useState('');
+
+  // Face enrollment gate
+  const [showFaceEnrollment, setShowFaceEnrollment] = useState(false);
+  const [faceEnrolled, setFaceEnrolled] = useState(false);
+  const [verifiedElderId, setVerifiedElderId] = useState<string | null>(null);
+
+  // ── On mount: anonymous sign-in (registration path only) ──────────────────
+  // Checks for an existing active Supabase session first to avoid creating
+  // duplicate anonymous identities on remount or page navigation.
+  useEffect(() => {
+    if (!isRegistering) return;
+
+    let cancelled = false;
+    const doSignIn = async () => {
+      setAuthLoading(true);
+      setAuthError('');
+
+      // Check for an already-authenticated session (anonymous or otherwise)
+      // before creating a new one. This handles the case where the user
+      // navigated away and came back, or HMR caused a remount.
+      try {
+        const { data: sessionData } = await supabase.auth.getUser();
+        if (sessionData?.user && !cancelled) {
+          // Re-use the existing anonymous session
+          // eslint-disable-next-line no-console
+          console.info('[Onboarding] Reusing existing Supabase session:', sessionData.user.id);
+          setAuthUserId(sessionData.user.id);
+          setAuthLoading(false);
+          return;
+        }
+      } catch {
+        // Session check failed — fall through to signInAnonymously
+      }
+
+      const result = await signInAnonymouslyAndCreateProfile(name.trim() || 'Elder');
+
+      if (cancelled) return;
+
+      if (!result.success) {
+        setAuthError(result.error ?? 'Could not set up your account. Please try again.');
+        setAuthLoading(false);
+        return;
+      }
+
+      setAuthUserId(result.authUserId ?? null);
+      setAuthLoading(false);
+    };
+
+    void doSignIn();
+    return () => { cancelled = true; };
+    // Run once on mount only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── helpers ───────────────────────────────────────────────────────────────
 
   const speakStep = (msg: string) => {
     if (state.settings.voiceOn) speak(msg, language);
   };
 
   useEffect(() => {
-    if (state.patient && state.patient.onboarded && step <= 5) {
-      if (state.patient.baselineDone) navigate('/home');
-    }
+    const msgs: Record<number, string> = {
+      1: t('onboard.name'),
+      2: t('onboard.language'),
+      3: t('onboard.caregiver'),
+      4: t('onboard.reminders.pref'),
+      5: t('onboard.speak'),
+    };
+    if (msgs[step]) speakStep(msgs[step]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [step]);
 
   const toggle = <T,>(arr: T[], v: T): T[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
-  const next = () => {
+  // ── Step advancement ──────────────────────────────────────────────────────
+
+  const next = async () => {
     setError('');
     if (step === 1) {
       if (!name.trim() || !age.trim() || Number(age) < 50) {
@@ -65,11 +156,99 @@ export default function Onboarding() {
         setError(t('err.missing'));
         return;
       }
+
       dispatch({ type: 'UPDATE_SETTINGS', settings: { speakInstructions: speakSel === 'yes', voiceOn: true } });
+
+      // HARD REQUIREMENT: authUserId MUST exist (set during mount sign-in).
+      // If it doesn't, registration cannot proceed — do NOT fall back to a local ID.
+      if (!authUserId) {
+        setError(
+          'Account setup is not complete. Anonymous authentication did not succeed. Please go back and try again.'
+        );
+        setSaving(false);
+        return;
+      }
+
+      // Persist to Supabase and get the authoritative elderId (elder_profiles.id)
+      setSaving(true);
+
+      const result = await saveElderProfile({
+        authUserId,
+        name: name.trim(),
+        age: Number(age),
+        language,
+        region: 'assam' as Region,
+        interests,
+      });
+
+      if (!result.success || !result.elderId) {
+        setSaving(false);
+        // HARD STOP — do not open FaceEnrollment with a fake local ID
+        setError(
+          result.error ??
+            'Could not save your profile to the server. Please check your connection and try again.'
+        );
+        return;
+      }
+
+      const elderId = result.elderId;
+      // eslint-disable-next-line no-console
+      console.info('[Onboarding] Elder profile saved to Supabase — elderId:', elderId);
+
+      // ── VERIFY ELDER PROFILE BEFORE FACE ENROLLMENT ───────────────────────
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData?.user) {
+        // eslint-disable-next-line no-console
+        console.error('[Onboarding] Verification failed — no active Supabase session:', userErr);
+        setSaving(false);
+        setError('Elder profile was not created correctly.');
+        return;
+      }
+
+      const { data: currentProfile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('auth_user_id', userData.user.id)
+        .maybeSingle();
+
+      if (profileErr || !currentProfile) {
+        // eslint-disable-next-line no-console
+        console.error('[Onboarding] Verification failed — profiles row not found:', profileErr);
+        setSaving(false);
+        setError('Elder profile was not created correctly.');
+        return;
+      }
+
+      const { data: verifiedElder, error: verifyErr } = await getElderProfileById(elderId);
+
+      if (verifyErr || !verifiedElder) {
+        // eslint-disable-next-line no-console
+        console.error('[Onboarding] Verification failed — elder_profiles row not found for elderId:', verifyErr);
+        setSaving(false);
+        setError('Elder profile was not created correctly.');
+        return;
+      }
+
+      if (verifiedElder.profile_id !== currentProfile.id) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[Onboarding] Verification failed — profile_id mismatch: elder_profiles.profile_id (${verifiedElder.profile_id}) !== profiles.id (${currentProfile.id})`
+        );
+        setSaving(false);
+        setError('Elder profile was not created correctly.');
+        return;
+      }
+
+      // eslint-disable-next-line no-console
+      console.info('[Onboarding] Elder profile verified successfully — proceeding to Face Enrollment');
+      setVerifiedElderId(elderId);
+      setSaving(false);
+
+      // Commit to app state with the REAL Supabase elder_profiles UUID
       dispatch({
         type: 'COMPLETE_ONBOARDING',
         patient: {
-          id: uid('patient'),
+          id: elderId,          // ← authoritative Supabase UUID, never a local uid()
           name: name.trim(),
           age: Number(age),
           language,
@@ -86,11 +265,16 @@ export default function Onboarding() {
           relationship: relationship.trim() || t('common.familyMember'),
         },
       });
-      navigate('/baseline');
+
+      // Open mandatory face enrollment ONLY after the real elderId is verified
+      setShowFaceEnrollment(true);
       return;
     }
+
     setStep((s) => s + 1);
   };
+
+  // ── Layout helpers ────────────────────────────────────────────────────────
 
   const stepTitle = (n: number) => {
     if (n === 1) return `👋 ${t('onboard.name')}`;
@@ -101,14 +285,130 @@ export default function Onboarding() {
   };
 
   const stepHint: Record<number, string> = {
-    1: 'We’ll use this to make NeuroSaathi feel like yours — warm, familiar and personal.',
+    1: "We'll use this to make NeuroSaathi feel like yours \u2014 warm, familiar and personal.",
     2: 'Choose the language you are most comfortable in. You can change it anytime.',
-    3: 'Someone you trust — we’ll keep them gently in the loop, with your permission.',
+    3: "Someone you trust \u2014 we'll keep them gently in the loop, with your permission.",
     4: 'Pick what helps your day feel steady. Reminders are gentle and easy to snooze.',
-    5: 'Almost done — would you like a calm voice to read instructions aloud?',
+    5: 'Almost done \u2014 would you like a calm voice to read instructions aloud?',
   };
 
   const pct = (step / 5) * 100;
+
+  // ── Anonymous auth loading / error state ──────────────────────────────────
+
+  if (isRegistering && authLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-canvas px-4">
+        <img src="/neurosaathi-header.png" alt="NeuroSaathi" className="h-12 w-auto" />
+        <div className="flex flex-col items-center gap-4 rounded-[28px] bg-white px-8 py-10 shadow-card border border-brand-100 text-center max-w-sm w-full">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+          <p className="text-lg font-extrabold text-brand-900">Setting up your account…</p>
+          <p className="text-sm font-semibold text-neutral-500">No email or password needed — your face will be your key.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isRegistering && authError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-canvas px-4">
+        <img src="/neurosaathi-header.png" alt="NeuroSaathi" className="h-12 w-auto" />
+        <div className="flex flex-col items-center gap-4 rounded-[28px] bg-white px-8 py-10 shadow-card border border-danger-200 text-center max-w-sm w-full">
+          <div className="text-4xl">⚠️</div>
+          <p className="text-lg font-extrabold text-brand-900">Account setup failed</p>
+          <p className="text-sm font-semibold leading-relaxed text-neutral-500">{authError}</p>
+          <button
+            onClick={() => { setAuthError(''); setAuthLoading(true); void signInAnonymouslyAndCreateProfile(name || 'Elder').then((r) => { setAuthLoading(false); if (r.success) setAuthUserId(r.authUserId ?? null); else setAuthError(r.error ?? 'Failed'); }); }}
+            className="rounded-2xl bg-brand-700 px-6 py-3 text-sm font-extrabold text-white hover:bg-brand-800 transition"
+          >
+            Try Again
+          </button>
+          <button onClick={() => navigate('/login')} className="text-sm font-semibold text-neutral-400 hover:text-brand-700">
+            ← Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Face enrollment gate (shown after step 5) ─────────────────────────────
+
+  if (showFaceEnrollment && !faceEnrolled) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-canvas px-4 py-8">
+        {/* ambient */}
+        <div className="pointer-events-none fixed inset-0" aria-hidden>
+          <div className="absolute -top-28 left-1/2 h-[520px] w-[780px] -translate-x-1/2 rounded-full bg-brand-50 opacity-70 blur-2xl" />
+          <div className="absolute -bottom-24 -right-24 h-[420px] w-[520px] rounded-full bg-warm-50 opacity-60 blur-2xl" />
+        </div>
+        <div className="relative w-full max-w-[500px] fade-up">
+          <img src="/neurosaathi-header.png" alt="NeuroSaathi" className="mx-auto mb-5 h-11 w-auto" />
+
+          <div className="relative overflow-hidden rounded-[32px] bg-white shadow-[0_24px_64px_-20px_rgba(64,107,94,0.28)] border border-brand-100/60 px-6 pb-8 pt-7 sm:px-9 sm:pt-8">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-200/60 to-transparent" aria-hidden />
+
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-brand-50 border border-brand-100 text-[2.5rem] shadow-soft">
+                📷
+              </div>
+              <h1 className="font-display text-[26px] font-extrabold tracking-tight text-brand-900">
+                One last step — your face key 🛡️
+              </h1>
+              <p className="mx-auto mt-3 max-w-[380px] text-[15px] font-semibold leading-relaxed text-neutral-500">
+                NeuroSaathi uses your face to recognise you — no passwords, ever.
+                This takes about 30 seconds. Look naturally at the camera.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-4 py-3">
+                <span className="text-xl shrink-0">🔒</span>
+                <p className="text-sm font-semibold text-brand-800">
+                  Only the <strong>derived face descriptors</strong> (128 numbers per sample) are stored — never raw photos or video.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-4 py-3">
+                <span className="text-xl shrink-0">☁️</span>
+                <p className="text-sm font-semibold text-brand-800">
+                  Your face profile is saved securely to your personal Supabase account.
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-5 text-center text-xs font-extrabold uppercase tracking-widest text-danger-600">
+              ⚠️ Face enrollment is required to complete registration
+            </p>
+          </div>
+        </div>
+
+        {/* FaceEnrollment modal — open=true, cannot be dismissed (onClose shows warning) */}
+        <FaceEnrollment
+          open={true}
+          elderId={verifiedElderId ?? undefined}
+          onClose={() => {
+            // Cannot skip — show a gentle reminder but keep modal available
+            setError('Face recognition is required to complete your registration. Please look at the camera.');
+          }}
+          onEnrolled={() => {
+            setFaceEnrolled(true);
+            setShowFaceEnrollment(false);
+            // Navigate to home — registration fully complete
+            navigate('/home');
+          }}
+        />
+
+        {error && (
+          <div className="relative w-full max-w-[500px]">
+            <div className="rounded-2xl border border-accent-200 bg-accent-50 px-4 py-3 text-center text-sm font-bold text-accent-700">
+              ⚠️ {error}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Main onboarding form (steps 1-5) ──────────────────────────────────────
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-8 md:py-10">
@@ -128,6 +428,14 @@ export default function Onboarding() {
             <span className="text-[13px] font-extrabold tracking-wide text-brand-700">Step {step} of 5</span>
           </div>
         </div>
+
+        {/* Anonymous auth indicator */}
+        {isRegistering && authUserId && (
+          <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+            <span className="text-base shrink-0">✅</span>
+            <p className="text-xs font-extrabold text-emerald-800">Account created — no password needed. Your face will be your key.</p>
+          </div>
+        )}
 
         <div className="relative overflow-hidden rounded-[32px] bg-white shadow-[0_24px_64px_-20px_rgba(64,107,94,0.28),0_8px_24px_-8px_rgba(64,107,94,0.12)] border border-brand-100/60">
           {/* subtle top highlight line */}
@@ -204,7 +512,7 @@ export default function Onboarding() {
                         autoFocus
                       />
                     </div>
-                    <p className="mt-2 text-xs font-semibold text-neutral-400">As you’d like us to call you — first name is perfect.</p>
+                    <p className="mt-2 text-xs font-semibold text-neutral-400">As you'd like us to call you — first name is perfect.</p>
                   </div>
                   <div>
                     <label className="label text-[15px] tracking-wide">{t('onboard.age')}</label>
@@ -297,7 +605,7 @@ export default function Onboarding() {
                   <div className="rounded-2xl bg-warm-50 px-4 py-3.5 border border-warm-200">
                     <p className="text-[13px] font-bold leading-relaxed text-warm-600">
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-warm-500 shadow-sm mr-2 align-middle">💛</span>
-                      If left blank we’ll use “{t('common.familyMember')}” — always respectful, never clinical.
+                      If left blank we'll use "{t('common.familyMember')}" — always respectful, never clinical.
                     </p>
                   </div>
                 </div>
@@ -404,7 +712,7 @@ export default function Onboarding() {
                       <HeartIcon size={16} />
                     </span>
                     <p className="text-xs font-semibold leading-relaxed text-brand-700">
-                      You’re almost there — next is a short, gentle starting activity. No scores, no pressure.
+                      Almost there — after this, you'll set up face recognition (takes ~30 seconds).
                     </p>
                   </div>
                 </div>
@@ -423,16 +731,22 @@ export default function Onboarding() {
                   ← {t('common.back')}
                 </Button>
               ) : (
-                <Button variant="ghost" onClick={() => navigate('/')} className="!rounded-full !px-6 !py-3.5 !text-base !font-extrabold">
+                <Button variant="ghost" onClick={() => navigate('/login')} className="!rounded-full !px-6 !py-3.5 !text-base !font-extrabold">
                   ← {t('common.back')}
                 </Button>
               )}
               <Button
                 onClick={next}
                 variant="primary"
-                className={`!rounded-full !px-8 !py-4 !text-[17px] !font-extrabold shadow-lift transition hover:shadow-float ${step === 5 ? '!bg-accent-500 hover:!bg-accent-600 !text-white !shadow-[0_12px_28px_-8px_rgba(240,134,65,0.45)]' : '!bg-brand-700 hover:!bg-brand-800'}`}
+                disabled={saving}
+                className={`!rounded-full !px-8 !py-4 !text-[17px] !font-extrabold shadow-lift transition hover:shadow-float ${step === 5 ? '!bg-accent-500 hover:!bg-accent-600 !text-white !shadow-[0_12px_28px_-8px_rgba(240,134,65,0.45)]' : '!bg-brand-700 hover:!bg-brand-800'} disabled:opacity-60`}
               >
-                {step === 5 ? `✅ ${t('common.continue')}` : `${t('common.next')} →`}
+                {saving && step === 5 ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Saving…
+                  </span>
+                ) : step === 5 ? `📷 Set Up Face Recognition →` : `${t('common.next')} →`}
               </Button>
             </div>
           </div>
@@ -443,7 +757,7 @@ export default function Onboarding() {
           <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
             <ShieldIcon size={12} />
           </span>
-          Private by design in this prototype — everything stays on this device. You can edit any step next.
+          No password. No email. Your face is your key — private by design.
         </p>
       </div>
     </div>

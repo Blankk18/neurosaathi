@@ -1,10 +1,25 @@
 // ============================================================================
 // FACE LOGIN — Live Biometric Scan Authentication via Camera
 //
-// Automatically connects to live camera, analyzes facial landmarks & 128-dim
-// descriptors using @vladmandic/face-api, computes Euclidean distance against
-// enrolled profile, gates on 3 consecutive matches, and logs authoritative
-// scan events to the backend.
+// ELDER IDENTITY RESOLUTION (in order):
+//   1. state.patient?.id — if it's a real Supabase UUID, use it directly.
+//   2. recoverElderIdFromSession() — walks auth.uid() → profiles → elder_profiles
+//      using the active Supabase anonymous session. Dispatches RESTORE_ELDER_SESSION
+//      to persist the recovered identity.
+//   3. No known elder → show "Please register your face first."
+//
+// FACE PROFILE LOADING (after elderId is resolved):
+//   1. loadFaceProfile(elderId) — IndexedDB cache, keyed by elder (fast path)
+//   2. loadFaceEnrollment(elderId) — Supabase (authoritative, if cache empty)
+//   Supabase result is cached to IndexedDB for next load.
+//
+// MATCHING:
+//   useFaceRecognition → 3 consecutive matches → onSuccess
+//
+// SECURITY:
+//   - Never falls back to 'patient-1', 'patient-asha', or any local uid()
+//   - Never scans all enrolled users' embeddings
+//   - getPublicUrl() is never called for the private face-enrollments bucket
 // ============================================================================
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -13,9 +28,20 @@ import { Modal } from '@/components/ui';
 import { LiveFaceScanner } from './LiveFaceScanner';
 import { useFaceRecognition } from './useFaceRecognition';
 import { loadFaceProfile, saveFaceProfile } from './faceRecognition.service';
-import { faceApi } from '@/services/faceApi';
+import { loadFaceEnrollment } from '@/services/faceDatabaseService';
+import { recoverElderIdFromSession } from '@/services/authService';
 import { FaceEnrollment } from './FaceEnrollment';
+import { DEMO_PATIENT_ID } from '@/data/demoData';
 import type { FaceProfile } from './types';
+import type { Patient } from '@/types';
+
+/** Returns true only when id is a real Supabase UUID (not a demo/local ID). */
+function isRealSupabaseUuid(id: string | undefined): boolean {
+  if (!id) return false;
+  if (id === DEMO_PATIENT_ID) return false;
+  if (id.startsWith('patient-') || id.startsWith('caregiver-')) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
 
 export function FaceLogin({
   open,
@@ -28,39 +54,94 @@ export function FaceLogin({
   onSuccess: (photo?: string) => void;
   onUsePin: () => void;
 }) {
-  const { state, t, speakText } = useApp();
+  const { state, dispatch, t, speakText } = useApp();
   const [profile, setProfile] = useState<FaceProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [showEnrollment, setShowEnrollment] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [noElder, setNoElder] = useState(false);
 
-  const sessionIdRef = useRef<string>('');
+  /** Guard: prevents handleMatch firing more than once per open session. */
   const hasLoggedRef = useRef(false);
+  /** The resolved authoritative elder ID for this session. */
+  const elderIdRef = useRef<string | null>(null);
 
-  const userId = state.patient?.id || 'patient-1';
-  const name = state.patient?.name?.split(' ')[0] ?? 'Asha';
+  const name = state.patient?.name?.split(' ')[0] ?? 'Elder';
 
-  // Fetch enrolled face profile (first check local IndexedDB, fallback to server)
+  // ---------------------------------------------------------------------------
+  // Step 1: Resolve authoritative elder ID
+  // ---------------------------------------------------------------------------
+  const resolveElderId = useCallback(async (): Promise<string | null> => {
+    // Fast path: state already has a real Supabase UUID
+    if (isRealSupabaseUuid(state.patient?.id)) {
+      return state.patient!.id;
+    }
+
+    // Slow path: recover from active Supabase anonymous session
+    // eslint-disable-next-line no-console
+    console.info('[FaceLogin] No real elder UUID in state — attempting session recovery…');
+    const recovered = await recoverElderIdFromSession();
+
+    if (!recovered.success || !recovered.elderId) {
+      // eslint-disable-next-line no-console
+      console.info('[FaceLogin] No active Supabase elder session found.');
+      return null;
+    }
+
+    // Patch app state with the recovered elder identity so subsequent operations
+    // (e.g. FaceEnrollment, FaceSetup) have the real ID without a full re-onboard.
+    const restoredPatient: Patient = {
+      id: recovered.elderId,
+      name: recovered.name ?? state.patient?.name ?? 'Elder',
+      age: recovered.age ?? state.patient?.age ?? 0,
+      language: recovered.language ?? state.patient?.language ?? 'en',
+      region: recovered.region ?? state.patient?.region ?? 'assam',
+      caregiverName: state.patient?.caregiverName ?? '',
+      caregiverRelationship: state.patient?.caregiverRelationship ?? '',
+      interests: recovered.interests ?? state.patient?.interests ?? [],
+      onboarded: true,
+      baselineDone: state.patient?.baselineDone ?? false,
+    };
+    dispatch({ type: 'RESTORE_ELDER_SESSION', patient: restoredPatient });
+
+    // eslint-disable-next-line no-console
+    console.info('[FaceLogin] Elder session recovered — elderId:', recovered.elderId);
+    return recovered.elderId;
+  }, [state.patient, dispatch]);
+
+  // ---------------------------------------------------------------------------
+  // Step 2: Fetch enrolled face profile for resolved elder ID
+  // ---------------------------------------------------------------------------
   const fetchProfile = useCallback(async () => {
     setLoadingProfile(true);
+    setNoElder(false);
+
     try {
-      let prof = await loadFaceProfile();
+      const elderId = await resolveElderId();
+
+      if (!elderId) {
+        // No registered elder found — show registration prompt
+        setNoElder(true);
+        setProfile(null);
+        setLoadingProfile(false);
+        return;
+      }
+
+      elderIdRef.current = elderId;
+
+      // Fast path: IndexedDB cache (keyed by elderId, NOT global)
+      let prof = await loadFaceProfile(elderId);
+
       if (!prof || !prof.enrolled || prof.samples.length === 0) {
-        const serverProf = await faceApi.getProfileForLogin(userId);
-        if (serverProf && serverProf.enrolled && serverProf.samples.length > 0) {
-          prof = {
-            version: 1,
-            enrolled: true,
-            samples: serverProf.samples.map((s) => ({
-              descriptor: s,
-              capturedAt: Date.now(),
-            })),
-            enrolledAt: Date.now(),
-            patientId: userId,
-          };
-          await saveFaceProfile(prof);
+        // Authoritative path: Supabase face_enrollments
+        const supabaseProf = await loadFaceEnrollment(elderId);
+        if (supabaseProf?.enrolled && supabaseProf.samples.length > 0) {
+          prof = supabaseProf;
+          // Cache to IndexedDB (scoped by elderId) for faster next load
+          await saveFaceProfile(prof, elderId).catch(() => null);
         }
       }
+
       setProfile(prof);
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -69,7 +150,7 @@ export function FaceLogin({
     } finally {
       setLoadingProfile(false);
     }
-  }, [userId]);
+  }, [resolveElderId]);
 
   // Capture a snapshot frame for local caregiver notification display
   const captureFrame = (): string => {
@@ -102,20 +183,6 @@ export function FaceLogin({
 
     const photo = captureFrame();
 
-    // Log authoritative MATCHED scan event to the backend
-    try {
-      await faceApi.recordScan({
-        userId,
-        result: 'MATCHED',
-        faceDistance: face.lastDistance ?? 0.35,
-        deviceSessionId: sessionIdRef.current,
-        photo: photo || null,
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[FaceLogin] Server scan record notice:', err);
-    }
-
     if (state.settings.voiceOn) {
       speakText(`${name}. ${t('login.success.elder')}`);
     }
@@ -124,26 +191,21 @@ export function FaceLogin({
     setTimeout(() => {
       onSuccess(photo);
     }, 400);
-  }, [userId, name, state.settings.voiceOn, speakText, t, onSuccess]);
+  }, [name, state.settings.voiceOn, speakText, t, onSuccess]);
 
   const face = useFaceRecognition({
     profile,
     onMatch: handleMatch,
   });
 
-  // Log scan failure if max attempts reached or explicitly not recognized
+  // Log scan failure if max attempts reached
   useEffect(() => {
-    if (!open || hasLoggedRef.current) return;
+    if (!open) return;
     if (face.state === 'failure' && face.status.key === 'face.tooMany') {
-      hasLoggedRef.current = true;
-      faceApi.recordScan({
-        userId,
-        result: 'NOT_RECOGNIZED',
-        faceDistance: face.lastDistance ?? null,
-        deviceSessionId: sessionIdRef.current,
-      }).catch(() => null);
+      // eslint-disable-next-line no-console
+      console.warn('[FaceLogin] Max attempts reached — face not recognized.');
     }
-  }, [face.state, face.status.key, face.lastDistance, open, userId]);
+  }, [face.state, face.status.key, open]);
 
   // Lifecycle: open/close handling
   useEffect(() => {
@@ -153,7 +215,6 @@ export function FaceLogin({
       return;
     }
 
-    sessionIdRef.current = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     hasLoggedRef.current = false;
     setVerified(false);
 
@@ -174,15 +235,6 @@ export function FaceLogin({
   }, [open, profile, loadingProfile]);
 
   const handleClose = () => {
-    if (!hasLoggedRef.current && face.live) {
-      hasLoggedRef.current = true;
-      faceApi.recordScan({
-        userId,
-        result: 'NO_FACE',
-        faceDistance: null,
-        deviceSessionId: sessionIdRef.current,
-      }).catch(() => null);
-    }
     face.cancel();
     onClose();
   };
@@ -210,12 +262,29 @@ export function FaceLogin({
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
               <p className="mt-3 text-sm font-bold text-neutral-600">Checking biometric security profile…</p>
             </div>
+          ) : noElder ? (
+            /* No registered elder session found at all */
+            <div className="space-y-4 rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-6 text-center">
+              <div className="text-4xl">👤</div>
+              <div className="text-lg font-extrabold text-brand-900">No Elder Profile Found</div>
+              <p className="text-sm font-semibold text-neutral-600">
+                Please register your face first. There is no active elder account linked to this device.
+              </p>
+              <button
+                type="button"
+                onClick={handleClose}
+                className="w-full rounded-2xl border border-neutral-300 bg-white px-5 py-3 text-sm font-extrabold text-neutral-700 transition hover:bg-neutral-100"
+              >
+                ← Back to Register
+              </button>
+            </div>
           ) : !isEnrolled ? (
+            /* Elder account exists but no face enrolled yet */
             <div className="space-y-4 rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-6 text-center">
               <div className="text-4xl">📸</div>
               <div className="text-lg font-extrabold text-brand-900">No Face Enrolled Yet</div>
               <p className="text-sm font-semibold text-neutral-600">
-                A face profile has not been set up for this elder yet. You can set it up now or sign in with your PIN.
+                A face profile has not been set up for this elder yet. Set it up now.
               </p>
               <div className="flex flex-col gap-2 pt-2">
                 <button
@@ -309,6 +378,7 @@ export function FaceLogin({
       {/* Face Enrollment Modal if triggered from login */}
       <FaceEnrollment
         open={showEnrollment}
+        elderId={elderIdRef.current ?? state.patient?.id}
         onClose={() => setShowEnrollment(false)}
         onEnrolled={() => {
           setShowEnrollment(false);

@@ -54,12 +54,12 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function putProfile(profile: FaceProfile): Promise<boolean> {
+async function putProfile(profile: FaceProfile, key: string): Promise<boolean> {
   try {
     const db = await openDb();
     return await new Promise<boolean>((resolve) => {
       const tx = db.transaction(DB_STORE, 'readwrite');
-      tx.objectStore(DB_STORE).put(profile, PROFILE_KEY);
+      tx.objectStore(DB_STORE).put(profile, key);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
       tx.onabort = () => resolve(false);
@@ -69,12 +69,12 @@ async function putProfile(profile: FaceProfile): Promise<boolean> {
   }
 }
 
-async function getProfile(): Promise<FaceProfile | null> {
+async function getProfile(key: string): Promise<FaceProfile | null> {
   try {
     const db = await openDb();
     return await new Promise<FaceProfile | null>((resolve) => {
       const tx = db.transaction(DB_STORE, 'readonly');
-      const req = tx.objectStore(DB_STORE).get(PROFILE_KEY);
+      const req = tx.objectStore(DB_STORE).get(key);
       req.onsuccess = () => resolve((req.result as FaceProfile) ?? null);
       req.onerror = () => resolve(null);
     });
@@ -277,21 +277,42 @@ export function movementDetected(a: FaceAlignment, prev: FaceAlignment | null): 
 // Profile persistence
 // ----------------------------------------------------------------------------
 
-export async function loadFaceProfile(): Promise<FaceProfile | null> {
-  const profile = await getProfile();
+/**
+ * Load face profile from IndexedDB, scoped by elderId.
+ * Key format: 'face-profile:{elderId}'
+ * This prevents a cached profile from one user being served to another.
+ */
+export async function loadFaceProfile(elderId?: string): Promise<FaceProfile | null> {
+  const key = elderId ? `${PROFILE_KEY}:${elderId}` : PROFILE_KEY;
+  const profile = await getProfile(key);
   return profile && profile.version === PROFILE_VERSION ? profile : null;
 }
 
-export async function saveFaceProfile(profile: FaceProfile): Promise<boolean> {
-  return putProfile({ ...profile, version: PROFILE_VERSION });
+/**
+ * Save face profile to IndexedDB, scoped by elderId.
+ * Blobs (imageBlob) are NOT stored here — only descriptors and metadata.
+ */
+export async function saveFaceProfile(profile: FaceProfile, elderId?: string): Promise<boolean> {
+  const key = elderId ? `${PROFILE_KEY}:${elderId}` : PROFILE_KEY;
+  // Strip any imageBlob fields before IndexedDB storage
+  const stripped: FaceProfile = {
+    ...profile,
+    version: PROFILE_VERSION,
+    samples: profile.samples.map((s) => ({ descriptor: s.descriptor, capturedAt: s.capturedAt })),
+  };
+  return putProfile(stripped, key);
 }
 
-export async function resetFaceProfile(): Promise<boolean> {
+/**
+ * Delete face profile from IndexedDB, scoped by elderId.
+ */
+export async function resetFaceProfile(elderId?: string): Promise<boolean> {
+  const key = elderId ? `${PROFILE_KEY}:${elderId}` : PROFILE_KEY;
   try {
     const db = await openDb();
     await new Promise<boolean>((resolve) => {
       const tx = db.transaction(DB_STORE, 'readwrite');
-      tx.objectStore(DB_STORE).delete(PROFILE_KEY);
+      tx.objectStore(DB_STORE).delete(key);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
     });

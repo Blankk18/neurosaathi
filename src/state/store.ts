@@ -56,7 +56,14 @@ export type Action =
   | { type: 'ADD_CONTACT'; contact: EmergencyContact }
   | { type: 'UPDATE_CONTACT'; contact: EmergencyContact }
   | { type: 'REMOVE_CONTACT'; id: string }
-  | { type: 'RESET_GUARDIAN' };
+  | { type: 'RESET_GUARDIAN' }
+  /**
+   * Patches patient identity from a recovered Supabase session.
+   * Called by FaceLogin when state.patient.id is missing/demo and
+   * recoverElderIdFromSession() succeeds. Only updates patient + role;
+   * does not overwrite game results, reminders, or other state.
+   */
+  | { type: 'RESTORE_ELDER_SESSION'; patient: Patient };
 
 function todayTimelineTime(): string {
   const d = new Date();
@@ -70,6 +77,15 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'RESET':
       return buildDemoState();
+
+    case 'RESTORE_ELDER_SESSION': {
+      return {
+        ...state,
+        currentRole: 'elder',
+        patient: action.patient,
+        onboarded: true,
+      };
+    }
 
     case 'COMPLETE_ONBOARDING': {
       return {

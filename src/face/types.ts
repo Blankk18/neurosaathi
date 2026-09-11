@@ -71,6 +71,12 @@ export interface FaceBox {
 export interface FaceSample {
   descriptor: number[]; // 128-dim
   capturedAt: number;
+  /**
+   * Raw JPEG/WebP Blob of the video frame captured at enrollment.
+   * Only present in-memory during enrollment — NOT serialized to JSON,
+   * NOT stored in IndexedDB. Uploaded to Supabase Storage and then discarded.
+   */
+  imageBlob?: Blob;
 }
 
 /** Enrolled face profile — stored locally (IndexedDB), never uploaded. */
