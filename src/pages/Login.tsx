@@ -12,7 +12,9 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '@/state/AppContext';
 import { LanguageSelector } from '@/components/common';
+import { Modal } from '@/components/ui';
 import { FaceLogin } from '@/face/FaceLogin';
+import { recoverElderIdFromSession } from '@/services/authService';
 import { DEMO_PATIENT_ID } from '@/data/demoData';
 import type { Role } from '@/types';
 
@@ -36,9 +38,11 @@ function isRealElderUuid(id: string | undefined): boolean {
 function ElderCard({
   onFace,
   onRegister,
+  onPin,
 }: {
   onFace: () => void;
   onRegister: () => void;
+  onPin: () => void;
 }) {
   const { state, t } = useApp();
   const hasRealElderProfile = isRealElderUuid(state.patient?.id);
@@ -77,6 +81,13 @@ function ElderCard({
             </button>
             <button
               type="button"
+              onClick={onPin}
+              className="flex w-full items-center justify-center gap-2 rounded-[20px] border-2 border-brand-100 bg-brand-50/60 px-5 py-3 text-sm font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card"
+            >
+              🔐 {t('face.usePin')}
+            </button>
+            <button
+              type="button"
               onClick={onRegister}
               className="mt-1 text-sm font-semibold text-neutral-400 hover:text-brand-700 transition text-center"
             >
@@ -101,6 +112,13 @@ function ElderCard({
               className="flex w-full items-center justify-center gap-2 rounded-[20px] border-2 border-brand-100 bg-brand-50/60 px-5 py-3.5 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card"
             >
               🛡️ Already registered? Face Login
+            </button>
+            <button
+              type="button"
+              onClick={onPin}
+              className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-neutral-200 bg-white px-5 py-3 text-sm font-extrabold text-neutral-700 transition hover:bg-neutral-50 hover:shadow-sm"
+            >
+              🔐 {t('face.usePin')}
             </button>
           </>
         )}
@@ -204,6 +222,133 @@ function CaregiverCard({ onFace }: { onFace: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// Elder PIN fallback modal
+// ---------------------------------------------------------------------------
+
+function ElderPinModal({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { t, speakText, dispatch, state } = useApp();
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = pin.trim().toLowerCase();
+    // Allow previous demo passcode 'asha123' as well as standard PIN '1234'
+    if (clean === 'asha123' || clean === '1234') {
+      setLoading(true);
+      setError(false);
+
+      // Attempt session recovery to restore real Supabase elder profile if present
+      try {
+        const recovered = await recoverElderIdFromSession();
+        if (recovered.success && recovered.elderId) {
+          dispatch({
+            type: 'RESTORE_ELDER_SESSION',
+            patient: {
+              id: recovered.elderId,
+              name: recovered.name || state.patient?.name || 'Asha Sharma',
+              age: recovered.age || state.patient?.age || 68,
+              language: recovered.language || state.patient?.language || 'en',
+              region: recovered.region || state.patient?.region || 'assam',
+              caregiverName: state.patient?.caregiverName || 'Family Member',
+              caregiverRelationship: state.patient?.caregiverRelationship || 'Family Member',
+              interests: recovered.interests || state.patient?.interests || [],
+              onboarded: true,
+              baselineDone: false,
+            },
+          });
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[ElderPinModal] Session recovery error (non-fatal):', err);
+      }
+
+      const patientName = state.patient?.name || t('login.patient.name');
+      speakText(`${patientName}. ${t('login.success.elder')}`);
+      dispatch({ type: 'SET_ROLE', role: 'elder' });
+      setLoading(false);
+      onSuccess();
+      return;
+    }
+
+    setError(true);
+    setPin('');
+    speakText(t('login.error'));
+  };
+
+  return (
+    <Modal open={open} title="Elder PIN Login" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="text-center">
+          <div className="text-3xl">🔐</div>
+          <h2 className="mt-2 text-xl font-extrabold text-brand-900">
+            {t('login.elder.title')} — PIN Login
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-neutral-500">
+            Enter your PIN or demo passcode to access your account.
+          </p>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="elder-pin-input">
+            🔐 {t('login.password')}
+          </label>
+          <input
+            id="elder-pin-input"
+            type="password"
+            autoFocus
+            className={`input ${error ? '!border-danger-300 !ring-2 !ring-danger-100' : ''}`}
+            value={pin}
+            onChange={(e) => {
+              setPin(e.target.value);
+              setError(false);
+            }}
+            placeholder={t('login.password.placeholder')}
+          />
+          <p className="mt-2 flex items-center gap-1.5 text-sm font-bold text-warm-600">
+            <span aria-hidden>💡</span> {t('login.elder.hint')}
+          </p>
+        </div>
+
+        {error && (
+          <p
+            className="rounded-2xl bg-danger-50 border border-danger-200 px-3.5 py-2.5 text-sm font-bold text-danger-700 flex items-center gap-2"
+            role="alert"
+          >
+            <span aria-hidden>⚠️</span> {t('login.error')}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn-huge !bg-accent-500 hover:!bg-accent-600 shadow-lift w-full disabled:opacity-60"
+        >
+          {loading ? 'Verifying…' : `🔓 ${t('common.start')}`}
+        </button>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full text-center text-sm font-semibold text-neutral-400 hover:text-neutral-600"
+        >
+          ← Cancel
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Login page
 // ---------------------------------------------------------------------------
 
@@ -212,6 +357,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [faceOpen, setFaceOpen] = useState(params.get('face') === '1');
+  const [pinOpen, setPinOpen] = useState(false);
   const [faceRole, setFaceRole] = useState<Role>('elder');
 
   const handleRegister = () => {
@@ -222,6 +368,10 @@ export default function Login() {
   const handleElderFace = () => {
     setFaceRole('elder');
     setFaceOpen(true);
+  };
+
+  const handleElderPin = () => {
+    setPinOpen(true);
   };
 
   const handleCaregiverFace = () => {
@@ -319,7 +469,11 @@ export default function Login() {
               </div>
 
               <div className="mt-6 grid gap-5">
-                <ElderCard onFace={handleElderFace} onRegister={handleRegister} />
+                <ElderCard
+                  onFace={handleElderFace}
+                  onRegister={handleRegister}
+                  onPin={handleElderPin}
+                />
                 <CaregiverCard onFace={handleCaregiverFace} />
               </div>
 
@@ -335,7 +489,19 @@ export default function Login() {
         open={faceOpen}
         onClose={() => setFaceOpen(false)}
         onSuccess={handleFaceSuccess}
-        onUsePin={() => setFaceOpen(false)}
+        onUsePin={() => {
+          setFaceOpen(false);
+          setPinOpen(true);
+        }}
+      />
+
+      <ElderPinModal
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onSuccess={() => {
+          setPinOpen(false);
+          navigate('/home');
+        }}
       />
     </div>
   );

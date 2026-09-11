@@ -270,13 +270,22 @@ export function FaceLogin({
               <p className="text-sm font-semibold text-neutral-600">
                 Please register your face first. There is no active elder account linked to this device.
               </p>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-full rounded-2xl border border-neutral-300 bg-white px-5 py-3 text-sm font-extrabold text-neutral-700 transition hover:bg-neutral-100"
-              >
-                ← Back to Register
-              </button>
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleUsePin}
+                  className="w-full rounded-2xl border border-brand-200 bg-white px-5 py-3 text-sm font-extrabold text-brand-800 hover:bg-brand-50 transition"
+                >
+                  🔐 {t('face.usePin')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full rounded-2xl border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-100"
+                >
+                  ← Back to Register
+                </button>
+              </div>
             </div>
           ) : !isEnrolled ? (
             /* Elder account exists but no face enrolled yet */
