@@ -166,6 +166,7 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   const countdownIntervalRef = useRef<number | null>(null);
   const validFaceFramesRef = useRef(0);
   const COUNTDOWN_START = 3;
+  const captureLockedRef = useRef(false); // prevent single tick multi-capture
   const STABLE_FRAMES_BEFORE_COUNTDOWN = 10; // ~2 seconds at ~5 Hz recognition
 
   const optsRef = useRef(opts);
@@ -388,7 +389,9 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
               }
               setCountdownTick(-1); // -1 = just captured, wait before next
 
-              // Perform immediate capture
+              // Perform immediate capture with capture lock + cooldown
+              if (captureLockedRef.current) return;
+              captureLockedRef.current = true;
               void (async () => {
                 const imageBlob = await captureFrameAsBlob(video);
                 attemptsRef.current += 1;
@@ -397,6 +400,8 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
                 setCountdownTick(0);
                 optsRef.current.onCountdownTick?.(0);
                 optsRef.current.onSample?.(toSample(face.descriptor as Float32Array, imageBlob));
+                // Cooldown ~1500ms before next photo stability can begin
+                setTimeout(() => { captureLockedRef.current = false; }, 1500);
               })();
             }
           }, 1000);
