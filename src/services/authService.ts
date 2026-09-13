@@ -143,7 +143,6 @@ export async function signInAnonymouslyAndCreateProfile(name: string): Promise<A
       message: profileError?.message,
       hint: profileError?.hint,
       details: profileError?.details,
-      status: profileError?.status,
       statusCode: (profileError as any)?.statusCode,
       fullError: profileError,
     });
