@@ -27,6 +27,7 @@ import {
   DETECTOR_SCORE_THRESHOLD,
   DETECTOR_SCORE_THRESHOLD_RELAXED,
   DETECTOR_RELAX_AFTER_FRAMES,
+  ENROLLMENT_SAMPLES,
   ENROLLMENT_STABILITY_MS,
   ENROLLMENT_COOLDOWN_MS,
 } from './faceRecognition.config';
@@ -49,6 +50,8 @@ export interface FaceHookOptions {
   profile: FaceProfile | null;
   /** When true, collect samples instead of matching against a profile. */
   enroll?: boolean;
+  /** Current number of enrolled samples already collected by parent. */
+  sampleCount?: number;
   /** When true, perform global face identification without a known profile. */
   globalMatch?: boolean;
   onSample?: (sample: FaceSample) => void;
@@ -81,32 +84,38 @@ export interface FaceHookResult {
   countdown: number | null;
   /** Whether face is currently stable and ready for capture. */
   isStable: boolean;
+  /** Whether a frame capture is currently executing. */
+  isCapturing: boolean;
   /** Whether cooldown between captures is active. */
   cooldownActive: boolean;
 }
 
+/** Convert a Base64 data URL to a binary Blob synchronously. */
+function dataURLtoBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(',');
+  const mime = parts[0].match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
 /**
  * Capture the current video frame as a JPEG Blob.
- * Called at the exact moment an enrollment sample descriptor is accepted,
- * so the image corresponds 1-to-1 with each face descriptor.
- * Returns undefined on any failure — callers treat missing blobs as non-fatal
- * but the enrollment UI will warn if blobs cannot be obtained.
+ * Uses synchronous canvas toDataURL + dataURLtoBlob for zero-deadlock execution,
+ * with a timed toBlob fallback.
  */
 async function captureFrameAsBlob(
   video: HTMLVideoElement,
   quality = 0.85,
 ): Promise<Blob | undefined> {
   try {
-    // Video must be in a state where frame data is available.
-    // readyState < 2 means no frame yet (HAVE_NOTHING or HAVE_METADATA only).
-    if (video.readyState < 2) {
-      // eslint-disable-next-line no-console
-      console.warn(`[captureFrameAsBlob] readyState=${video.readyState} < 2 — no frame data available yet`);
-      return undefined;
-    }
     if (video.videoWidth === 0 || video.videoHeight === 0) {
       // eslint-disable-next-line no-console
-      console.warn('[captureFrameAsBlob] videoWidth or videoHeight is 0 — cannot capture frame');
+      console.warn('[FaceEnrollment] videoWidth or videoHeight is 0 — cannot capture frame');
       return undefined;
     }
     const canvas = document.createElement('canvas');
@@ -115,24 +124,43 @@ async function captureFrameAsBlob(
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       // eslint-disable-next-line no-console
-      console.warn('[captureFrameAsBlob] Could not get 2d canvas context');
+      console.warn('[FaceEnrollment] Could not get 2d canvas context');
       return undefined;
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | undefined>((resolve) => {
-      canvas.toBlob((b) => resolve(b ?? undefined), 'image/jpeg', quality);
-    });
-    if (!blob || blob.size === 0) {
+
+    // Primary: synchronous toDataURL -> dataURLtoBlob (instant, cannot hang/deadlock)
+    try {
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      if (dataUrl && dataUrl.length > 50) {
+        const blob = dataURLtoBlob(dataUrl);
+        if (blob && blob.size > 0) {
+          // eslint-disable-next-line no-console
+          console.info(`[FaceEnrollment] Frame captured (${blob.size} bytes)`);
+          return blob;
+        }
+      }
+    } catch (dataErr) {
       // eslint-disable-next-line no-console
-      console.warn('[captureFrameAsBlob] canvas.toBlob returned null or zero-byte blob');
-      return undefined;
+      console.warn('[FaceEnrollment] toDataURL error, falling back to toBlob:', dataErr);
     }
-    // eslint-disable-next-line no-console
-    console.info(`[captureFrameAsBlob] Captured blob — size=${blob.size}, type=${blob.type}`);
-    return blob;
+
+    // Fallback: toBlob with strict 1500ms timeout
+    return await new Promise<Blob | undefined>((resolve) => {
+      const timeout = setTimeout(() => {
+        // eslint-disable-next-line no-console
+        console.warn('[FaceEnrollment] canvas.toBlob timed out after 1500ms');
+        resolve(undefined);
+      }, 1500);
+
+      canvas.toBlob((b) => {
+        clearTimeout(timeout);
+        resolve(b ?? undefined);
+      }, 'image/jpeg', quality);
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[captureFrameAsBlob] Exception during frame capture:', err);
+    console.warn('[FaceEnrollment] Exception during frame capture:', err);
     return undefined;
   }
 }
@@ -162,13 +190,18 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   const [status, setStatus] = useState<FaceStatusInfo>({ state: 'idle', key: 'face.cancel' });
 
   // Enrollment stability & timing state
+  type EnrollmentPhase = 'waiting' | 'stabilizing' | 'countdown' | 'capturing' | 'cooldown' | 'complete';
+  const enrollmentPhaseRef = useRef<EnrollmentPhase>('waiting');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isStable, setIsStable] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [cooldownActive, setCooldownActive] = useState(false);
 
-  const enrollmentCaptureLockRef = useRef(false);
-  const enrollmentStableSinceRef = useRef<number | null>(null);
-  const lastEnrollmentCaptureAtRef = useRef<number>(0);
+  const stabilityStartRef = useRef<number | null>(null);
+  const countdownStartRef = useRef<number | null>(null);
+  const lastCaptureTimeRef = useRef<number>(0);
+  const captureInProgressRef = useRef(false);
+  const lastCountdownNumberRef = useRef<number | null>(null);
 
   const optsRef = useRef(opts);
   optsRef.current = opts;
@@ -203,11 +236,15 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
     attemptsRef.current = 0;
     noFaceFramesRef.current = 0;
     livenessRef.current = { prev: null, count: 0 };
-    enrollmentCaptureLockRef.current = false;
-    enrollmentStableSinceRef.current = null;
-    lastEnrollmentCaptureAtRef.current = 0;
+    enrollmentPhaseRef.current = 'waiting';
+    stabilityStartRef.current = null;
+    countdownStartRef.current = null;
+    lastCaptureTimeRef.current = 0;
+    captureInProgressRef.current = false;
+    lastCountdownNumberRef.current = null;
     setCountdown(null);
     setIsStable(false);
+    setIsCapturing(false);
     setCooldownActive(false);
     setMatchProgress(0);
     setFaceBox(null);
@@ -250,9 +287,15 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         setLastScore(null);
         consecutiveRef.current = 0;
         livenessRef.current = { prev: null, count: 0 };
-        enrollmentStableSinceRef.current = null;
-        setCountdown(null);
-        setIsStable(false);
+        // If face is lost during stabilizing or countdown, gracefully reset to waiting
+        if (optsRef.current.enroll && enrollmentPhaseRef.current !== 'cooldown' && enrollmentPhaseRef.current !== 'capturing') {
+          enrollmentPhaseRef.current = 'waiting';
+          stabilityStartRef.current = null;
+          countdownStartRef.current = null;
+          lastCountdownNumberRef.current = null;
+          setCountdown(null);
+          setIsStable(false);
+        }
         return;
       }
 
@@ -268,9 +311,14 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         setFaceBox(null);
         consecutiveRef.current = 0;
         livenessRef.current = { prev: null, count: 0 };
-        enrollmentStableSinceRef.current = null;
-        setCountdown(null);
-        setIsStable(false);
+        if (optsRef.current.enroll && enrollmentPhaseRef.current !== 'cooldown' && enrollmentPhaseRef.current !== 'capturing') {
+          enrollmentPhaseRef.current = 'waiting';
+          stabilityStartRef.current = null;
+          countdownStartRef.current = null;
+          lastCountdownNumberRef.current = null;
+          setCountdown(null);
+          setIsStable(false);
+        }
         return;
       }
 
@@ -282,161 +330,243 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
       const align = alignmentFor(face, video.videoWidth);
       setAlignment(align);
 
-      // Guidance for extreme misalignment only — not every small offset.
-      // "Too far / too close" is based on size; centering is lenient.
-      const tooFar = align.size < 0.10;
-      const tooClose = align.size > 0.55;
-      if (tooFar) {
-        setSnap('guiding', 'face.tooFar');
-        consecutiveRef.current = 0;
-        enrollmentStableSinceRef.current = null;
-        setCountdown(null);
-        setIsStable(false);
-        return;
-      }
-      if (tooClose) {
-        setSnap('guiding', 'face.tooClose');
-        consecutiveRef.current = 0;
-        enrollmentStableSinceRef.current = null;
-        setCountdown(null);
-        setIsStable(false);
-        return;
-      }
-      // Only block on severe off-centre — isWellAligned is already lenient (0.45 x, 0.5 y).
-      if (!isWellAligned(align)) {
-        enrollmentStableSinceRef.current = null;
-        setCountdown(null);
-        setIsStable(false);
-        const hint =
-          align.x < -0.5 ? 'moveRight' : align.x > 0.5 ? 'moveLeft' : align.y < -0.5 ? 'moveDown' : null;
-        if (hint) {
-          setSnap('guiding', 'face.move.into', undefined, { hint });
+      // Guidance for extreme misalignment only (login mode primarily)
+      if (!optsRef.current.enroll) {
+        const tooFar = align.size < 0.10;
+        const tooClose = align.size > 0.55;
+        if (tooFar) {
+          setSnap('guiding', 'face.tooFar');
+          consecutiveRef.current = 0;
           return;
+        }
+        if (tooClose) {
+          setSnap('guiding', 'face.tooClose');
+          consecutiveRef.current = 0;
+          return;
+        }
+        // Only block on severe off-centre — isWellAligned is already lenient (0.45 x, 0.5 y).
+        if (!isWellAligned(align)) {
+          const hint =
+            align.x < -0.5 ? 'moveRight' : align.x > 0.5 ? 'moveLeft' : align.y < -0.5 ? 'moveDown' : null;
+          if (hint) {
+            setSnap('guiding', 'face.move.into', undefined, { hint });
+            return;
+          }
         }
       }
 
-      // ------------- enrollment path: automatic 3-5 sample capture -------------
+      // ------------- enrollment path: automatic 5-sample capture -------------
       if (optsRef.current.enroll) {
-        // Validation: reject low quality (< 0.5)
-        if (align.quality < 0.5) {
-          setSnap('faceDetected', 'face.lowQuality');
-          enrollmentStableSinceRef.current = null;
+        const now = performance.now();
+        const currentCount = optsRef.current.sampleCount ?? attemptsRef.current;
+
+        // Check if enrollment is already complete
+        if (currentCount >= ENROLLMENT_SAMPLES) {
+          enrollmentPhaseRef.current = 'complete';
+          setCountdown(null);
+          setIsStable(true);
+          setIsCapturing(false);
+          setCooldownActive(false);
+          setSnap('faceDetected', 'face.recognized');
+          return;
+        }
+
+        // 1. COOLDOWN PHASE (1500ms between captures)
+        if (enrollmentPhaseRef.current === 'cooldown') {
+          const elapsedCooldown = now - lastCaptureTimeRef.current;
+          if (elapsedCooldown < ENROLLMENT_COOLDOWN_MS) {
+            setCooldownActive(true);
+            setCountdown(null);
+            setIsStable(false);
+            setSnap('faceDetected', 'face.hold');
+            return;
+          }
+          // Cooldown complete!
+          // eslint-disable-next-line no-console
+          console.info(`[FaceEnrollment] Starting sample ${currentCount + 1}`);
+          setCooldownActive(false);
+          enrollmentPhaseRef.current = 'waiting';
+          stabilityStartRef.current = null;
+          countdownStartRef.current = null;
+          lastCountdownNumberRef.current = null;
           setCountdown(null);
           setIsStable(false);
+        }
+
+        // 2. CAPTURING PHASE: One-shot in flight
+        if (enrollmentPhaseRef.current === 'capturing' || captureInProgressRef.current) {
           return;
         }
 
-        // Validation: face box must be fully inside video frame
+        // 3. VALIDATE FACE PRESENCE FOR ENROLLMENT
+        // Allow natural poses, slight head turns, and reasonable webcam lighting
         const vw = video.videoWidth;
         const vh = video.videoHeight;
-        if (box.x < 0 || box.y < 0 || box.x + box.width > vw || box.y + box.height > vh) {
-          setSnap('faceDetected', 'face.offFrame');
-          enrollmentStableSinceRef.current = null;
-          setCountdown(null);
-          setIsStable(false);
-          return;
-        }
+        const severeOffFrame = box.x < -40 || box.y < -40 || box.x + box.width > vw + 40 || box.y + box.height > vh + 40;
+        const tooFar = align.size < 0.08;
+        const tooClose = align.size > 0.65;
+        const scoreLow = (face.detection.score ?? 0) < 0.20;
 
-        // Validation: detection score must meet the primary threshold
-        const detectionScore = face.detection.score ?? 0;
-        if (detectionScore < DETECTOR_SCORE_THRESHOLD) {
-          setSnap('faceDetected', 'face.lowScore');
-          enrollmentStableSinceRef.current = null;
-          setCountdown(null);
-          setIsStable(false);
-          return;
-        }
-
-        const now = performance.now();
-
-        // 1. Minimum cooldown between captures (~1500ms)
-        const timeSinceLastCapture = now - lastEnrollmentCaptureAtRef.current;
-        if (timeSinceLastCapture < ENROLLMENT_COOLDOWN_MS) {
-          setCooldownActive(true);
-          setCountdown(null);
-          setIsStable(false);
-          setSnap('faceDetected', 'face.hold');
-          return;
-        }
-        setCooldownActive(false);
-
-        // 2. Continuous stability check (real elapsed time, ~1000ms)
-        if (enrollmentStableSinceRef.current === null) {
-          enrollmentStableSinceRef.current = now;
-          setCountdown(3);
-          setIsStable(false);
-          setSnap('faceDetected', 'face.hold');
-          return;
-        }
-
-        const elapsed = now - enrollmentStableSinceRef.current;
-
-        // Visual preparation countdown: 3 -> 2 -> 1 -> capture
-        if (elapsed < 350) {
-          setCountdown(3);
-          setIsStable(false);
-          setSnap('faceDetected', 'face.hold');
-          return;
-        } else if (elapsed < 700) {
-          setCountdown(2);
-          setIsStable(false);
-          setSnap('faceDetected', 'face.hold');
-          return;
-        } else if (elapsed < ENROLLMENT_STABILITY_MS) {
-          setCountdown(1);
-          setIsStable(true);
-          setSnap('faceDetected', 'face.hold');
-          return;
-        }
-
-        // 3. Stability requirement met! Trigger automatic capture with lock
-        setCountdown(null);
-        setIsStable(true);
-
-        if (enrollmentCaptureLockRef.current) {
-          return;
-        }
-        enrollmentCaptureLockRef.current = true;
-
-        try {
-          // Verify descriptor dimension
-          const descriptor = Array.from(face.descriptor as Float32Array);
-          if (descriptor.length !== 128) {
+        if (severeOffFrame || tooFar || tooClose || scoreLow) {
+          if (enrollmentPhaseRef.current !== 'waiting') {
             // eslint-disable-next-line no-console
-            console.warn('[FaceEnrollment] Descriptor does not have 128 dimensions:', descriptor.length);
-            enrollmentStableSinceRef.current = null;
+            console.info('[FaceEnrollment] Face lost position — resetting to waiting');
+          }
+          enrollmentPhaseRef.current = 'waiting';
+          stabilityStartRef.current = null;
+          countdownStartRef.current = null;
+          lastCountdownNumberRef.current = null;
+          setCountdown(null);
+          setIsStable(false);
+          setSnap('detecting', tooFar ? 'face.tooFar' : tooClose ? 'face.tooClose' : 'face.looking');
+          return;
+        }
+
+        // 4. WAITING -> STABILIZING
+        if (enrollmentPhaseRef.current === 'waiting') {
+          enrollmentPhaseRef.current = 'stabilizing';
+          stabilityStartRef.current = now;
+          setIsStable(false);
+          setCountdown(null);
+          setSnap('faceDetected', 'face.hold');
+          // eslint-disable-next-line no-console
+          console.info(`[FaceEnrollment] Stable face detected`);
+          return;
+        }
+
+        // 5. STABILIZING (ENROLLMENT_STABILITY_MS = 800ms)
+        if (enrollmentPhaseRef.current === 'stabilizing') {
+          const elapsedStable = now - (stabilityStartRef.current ?? now);
+          if (elapsedStable < ENROLLMENT_STABILITY_MS) {
+            setIsStable(false);
+            setCountdown(null);
+            setSnap('faceDetected', 'face.hold');
+            return;
+          }
+          // Stability reached -> Start Countdown
+          enrollmentPhaseRef.current = 'countdown';
+          countdownStartRef.current = now;
+          lastCountdownNumberRef.current = 3;
+          setIsStable(true);
+          setCountdown(3);
+          setSnap('faceDetected', 'face.hold');
+          // eslint-disable-next-line no-console
+          console.info(`[FaceEnrollment] Countdown started for sample ${currentCount + 1}`);
+          // eslint-disable-next-line no-console
+          console.info('[FaceEnrollment] Countdown: 3');
+          return;
+        }
+
+        // 6. COUNTDOWN (3 -> 2 -> 1 -> Capture)
+        if (enrollmentPhaseRef.current === 'countdown') {
+          const elapsedCountdown = now - (countdownStartRef.current ?? now);
+          let remainingSeconds: number;
+
+          if (elapsedCountdown < 1000) {
+            remainingSeconds = 3;
+          } else if (elapsedCountdown < 2000) {
+            remainingSeconds = 2;
+          } else if (elapsedCountdown < 3000) {
+            remainingSeconds = 1;
+          } else {
+            remainingSeconds = 0;
+          }
+
+          if (remainingSeconds > 0) {
+            if (lastCountdownNumberRef.current !== remainingSeconds) {
+              lastCountdownNumberRef.current = remainingSeconds;
+              // eslint-disable-next-line no-console
+              console.info(`[FaceEnrollment] Countdown: ${remainingSeconds}`);
+            }
+            setCountdown(remainingSeconds);
+            setIsStable(true);
+            setSnap('faceDetected', 'face.hold');
             return;
           }
 
+          // COUNTDOWN REACHED 0! TRIGGER CAPTURE
+          // eslint-disable-next-line no-console
+          console.info(`[FaceEnrollment] Starting capture for sample ${currentCount + 1}`);
+          enrollmentPhaseRef.current = 'capturing';
+          captureInProgressRef.current = true;
+          setCountdown(null);
+          setIsCapturing(true);
           setSnap('faceDetected', 'face.capture');
 
-          // Capture the live video frame as a real JPEG Blob at this exact moment
-          const imageBlob = await captureFrameAsBlob(video);
-          if (!imageBlob || imageBlob.size === 0) {
-            // eslint-disable-next-line no-console
-            console.warn('[FaceEnrollment] Frame capture returned empty blob — retrying sample');
-            enrollmentStableSinceRef.current = null;
-            return;
-          }
+          const sampleIndexToCapture = currentCount + 1;
+          const capturedDesc = Array.from(face.descriptor as Float32Array);
 
-          attemptsRef.current += 1;
-          setAttemptCount(attemptsRef.current);
-          lastEnrollmentCaptureAtRef.current = performance.now();
-          enrollmentStableSinceRef.current = null;
-          setCooldownActive(true);
+          // Asynchronous capture task with safety timeout
+          void (async () => {
+            const safetyTimer = window.setTimeout(() => {
+              if (captureInProgressRef.current) {
+                // eslint-disable-next-line no-console
+                console.warn('[FaceEnrollment] Capture safety timeout (4000ms) fired — resetting state');
+                captureInProgressRef.current = false;
+                setIsCapturing(false);
+                enrollmentPhaseRef.current = 'waiting';
+                stabilityStartRef.current = null;
+                countdownStartRef.current = null;
+                lastCountdownNumberRef.current = null;
+                setCountdown(null);
+              }
+            }, 4000);
 
-          const sample: FaceSample = {
-            descriptor,
-            capturedAt: Date.now(),
-            imageBlob,
-          };
+            try {
+              if (capturedDesc.length !== 128) {
+                throw new Error(`Invalid descriptor length: ${capturedDesc.length}`);
+              }
+              // eslint-disable-next-line no-console
+              console.info('[FaceEnrollment] Descriptor generated: 128');
 
-          // eslint-disable-next-line no-console
-          console.info(`[FaceEnrollment] Sample ${attemptsRef.current} captured successfully (blob: ${imageBlob.size} bytes, desc: 128-d)`);
-          optsRef.current.onSample?.(sample);
-        } finally {
-          enrollmentCaptureLockRef.current = false;
+              const imageBlob = await captureFrameAsBlob(video);
+              if (!imageBlob || imageBlob.size === 0) {
+                throw new Error('Frame capture returned empty blob');
+              }
+              // eslint-disable-next-line no-console
+              console.info('[FaceEnrollment] Frame captured');
+
+              attemptsRef.current += 1;
+              setAttemptCount(attemptsRef.current);
+
+              const sample: FaceSample = {
+                descriptor: capturedDesc,
+                capturedAt: Date.now(),
+                imageBlob,
+              };
+
+              // eslint-disable-next-line no-console
+              console.info(`[FaceEnrollment] Sample ${sampleIndexToCapture} saved`);
+              optsRef.current.onSample?.(sample);
+
+              // Cooldown transition
+              lastCaptureTimeRef.current = performance.now();
+              enrollmentPhaseRef.current = 'cooldown';
+              setCooldownActive(true);
+              setIsCapturing(false);
+              stabilityStartRef.current = null;
+              countdownStartRef.current = null;
+              lastCountdownNumberRef.current = null;
+              // eslint-disable-next-line no-console
+              console.info('[FaceEnrollment] Starting cooldown');
+            } catch (err) {
+              // eslint-disable-next-line no-console
+              console.error(`[FaceEnrollment] Capture failed:`, err);
+              enrollmentPhaseRef.current = 'waiting';
+              stabilityStartRef.current = null;
+              countdownStartRef.current = null;
+              lastCountdownNumberRef.current = null;
+              setCountdown(null);
+              setIsCapturing(false);
+            } finally {
+              window.clearTimeout(safetyTimer);
+              captureInProgressRef.current = false;
+            }
+          })();
+
+          return;
         }
+
         return;
       }
 
@@ -637,6 +767,7 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
     setLive(false);
     setCountdown(null);
     setIsStable(false);
+    setIsCapturing(false);
     setCooldownActive(false);
   }, [cleanup, setSnap]);
 
@@ -658,6 +789,7 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
     modelsReady,
     countdown,
     isStable,
+    isCapturing,
     cooldownActive,
   };
 }

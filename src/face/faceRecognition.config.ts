@@ -38,7 +38,7 @@ export const MAX_RECOGNITION_ATTEMPTS = 120;
 export const ENROLLMENT_SAMPLES = 5;
 
 /** Required face stability duration before an automatic capture during enrollment (800ms-1200ms). */
-export const ENROLLMENT_STABILITY_MS = 1000;
+export const ENROLLMENT_STABILITY_MS = 800;
 
 /** Minimum cooldown in ms between consecutive enrollment captures. */
 export const ENROLLMENT_COOLDOWN_MS = 1500;

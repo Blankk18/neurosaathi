@@ -80,8 +80,15 @@ export function FaceEnrollment({
   const face = useFaceRecognition({
     profile: null,
     enroll: true,
+    sampleCount: samples.length,
     onSample: (sample) => {
-      setSamples((prev) => (prev.length >= ENROLLMENT_SAMPLES ? prev : [...prev, sample]));
+      setSamples((prev) => {
+        if (prev.length >= ENROLLMENT_SAMPLES) return prev;
+        const next = [...prev, sample];
+        // eslint-disable-next-line no-console
+        console.info(`[FaceEnrollment] onSample received — sample count is now ${next.length} of ${ENROLLMENT_SAMPLES}`);
+        return next;
+      });
     },
   });
 
@@ -419,15 +426,23 @@ export function FaceEnrollment({
                 ))}
               </div>
 
-              {/* Countdown / Cooldown / Status indication */}
+              {/* Countdown / Capturing / Cooldown / Status indication */}
               <div className="flex flex-col items-center gap-1">
-                {face.countdown != null ? (
+                {face.isCapturing ? (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1 text-sm font-extrabold text-white shadow-sm animate-pulse">
+                    <span>📸 Capturing photo {collected + 1}…</span>
+                  </div>
+                ) : face.countdown != null ? (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-1 text-sm font-extrabold text-white shadow-sm animate-bounce">
                     <span>📸 Capturing in {face.countdown}…</span>
                   </div>
                 ) : face.cooldownActive ? (
                   <div className="text-xs font-semibold text-neutral-500 animate-pulse">
                     Hold still for next photo…
+                  </div>
+                ) : face.isStable ? (
+                  <div className="text-xs font-semibold text-brand-600">
+                    Hold still…
                   </div>
                 ) : null}
 
