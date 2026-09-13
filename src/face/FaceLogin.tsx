@@ -53,6 +53,7 @@ export function FaceLogin({
   const [verified, setVerified] = useState(false);
   const [globalMatchFailed, setGlobalMatchFailed] = useState(false);
   const [globalMatchError, setGlobalMatchError] = useState('');
+  const [matchedElderName, setMatchedElderName] = useState<string | null>(null);
 
   /** Guard: prevents handleMatch firing more than once per open session. */
   const hasLoggedRef = useRef(false);
@@ -61,7 +62,11 @@ export function FaceLogin({
   /** Whether we're in global matching mode (unknown device). */
   const globalMatchModeRef = useRef(false);
 
-  const name = state.patient?.name?.split(' ')[0] ?? 'Elder';
+  // CRITICAL: Only use matched elder name if global matching succeeded.
+  // NEVER show state.patient?.name before global match completes.
+  const displayName = matchedElderName
+    ? matchedElderName.split(' ')[0]
+    : (globalMatchModeRef.current ? 'Checking...' : state.patient?.name?.split(' ')[0] ?? 'Elder');
 
   // ---------------------------------------------------------------------------
   // Step 1: Resolve authoritative elder ID for MODE A (known device)
@@ -198,13 +203,16 @@ export function FaceLogin({
           // eslint-disable-next-line no-console
           console.info('[FaceLogin] Global match successful: elderId=', faceMatch.elderId);
 
+          // Set matched elder name BEFORE dispatching, so UI updates immediately
+          setMatchedElderName(faceMatch.name ?? 'Elder');
+
           // Patch app state with matched elder identity
           const matchedPatient: Patient = {
             id: faceMatch.elderId,
-            name: faceMatch.name ?? state.patient?.name ?? 'Elder',
-            age: faceMatch.age ?? state.patient?.age ?? 0,
-            language: (faceMatch.language as any) ?? state.patient?.language ?? 'en',
-            region: (faceMatch.region as any) ?? state.patient?.region ?? 'assam',
+            name: faceMatch.name ?? 'Elder',
+            age: faceMatch.age ?? 0,
+            language: (faceMatch.language as any) ?? 'en',
+            region: (faceMatch.region as any) ?? 'assam',
             caregiverName: state.patient?.caregiverName ?? '',
             caregiverRelationship: state.patient?.caregiverRelationship ?? '',
             interests: state.patient?.interests ?? [],
@@ -214,8 +222,10 @@ export function FaceLogin({
           dispatch({ type: 'RESTORE_ELDER_SESSION', patient: matchedPatient });
           elderIdRef.current = faceMatch.elderId;
 
+          // Speak the matched elder's name
+          const matchedName = (faceMatch.name ?? 'Elder').split(' ')[0];
           if (state.settings.voiceOn) {
-            speakText(`${name}. ${t('login.success.elder')}`);
+            speakText(`${matchedName}. ${t('login.success.elder')}`);
           }
 
           setTimeout(() => {
@@ -235,7 +245,8 @@ export function FaceLogin({
 
       // MODE A: Local profile matching (existing behavior)
       if (state.settings.voiceOn) {
-        speakText(`${name}. ${t('login.success.elder')}`);
+        const localName = (state.patient?.name ?? 'Elder').split(' ')[0];
+        speakText(`${localName}. ${t('login.success.elder')}`);
       }
 
       // Short transition before redirect
@@ -268,12 +279,14 @@ export function FaceLogin({
       face.cancel();
       setVerified(false);
       setGlobalMatchFailed(false);
+      setMatchedElderName(null);
       return;
     }
 
     hasLoggedRef.current = false;
     setVerified(false);
     setGlobalMatchFailed(false);
+    setMatchedElderName(null);
 
     void fetchProfile();
 
@@ -313,7 +326,7 @@ export function FaceLogin({
           <div className="text-center">
             <div className="text-xl font-extrabold text-brand-900">🛡️ {t('face.title')}</div>
             <div className="mt-1 text-sm font-semibold text-neutral-500">
-              {t('face.welcome', { name })}
+              {t('face.welcome', { name: displayName })}
             </div>
           </div>
 
