@@ -1,22 +1,27 @@
 // ============================================================================
 // FACE LOGIN — Live Biometric Scan Authentication via Camera
 //
-// CROSS-DEVICE FACE LOGIN (NEW):
-//   1. state.patient?.id — if it's a real Supabase UUID, use it directly.
-//   2. matchFaceDescriptorGlobally() — NEW: sends face descriptor to RPC for global matching
-//      - Captures face → generates 128-dim descriptor
-//      - Calls match-face-descriptor RPC (server-side)
-//      - RPC searches ALL active face_enrollments
-//      - Returns matched elder_profiles.id (or null)
-//      - No device/auth chain dependency
-//   3. recoverElderIdFromSession() — FALLBACK for same-device session recovery
-//   4. No known elder → show "Please register your face first."
+// TWO MODES:
+//
+// MODE A — KNOWN ELDER (same device, existing session):
+//   1. state.patient?.id is a real Supabase elder UUID
+//   2. Load elder's face profile from face_enrollments
+//   3. Use local profile matching (existing behavior)
+//
+// MODE B — CROSS-DEVICE FACE IDENTIFICATION (unknown device, no session):
+//   1. No known elder UUID
+//   2. Camera opens anyway (globalMatch mode)
+//   3. Generate face descriptor
+//   4. Call matchFaceDescriptorGlobally(descriptor)
+//   5. RPC searches all active face_enrollments
+//   6. If matched: dispatch RESTORE_ELDER_SESSION, login
+//   7. If no match: show "Face not recognized", offer PIN fallback
 //
 // SECURITY:
 //   - Face descriptors never downloaded to browser
-//   - RPC runs server-side with service role
+//   - Global matching RPC runs server-side with service role
 //   - No device-specific state for identity
-//   - Never falls back to 'patient-1', 'patient-asha', or any local uid()
+//   - Never falls back to demo IDs or localStorage
 // ============================================================================
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -57,17 +62,20 @@ export function FaceLogin({
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [showEnrollment, setShowEnrollment] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [noElder, setNoElder] = useState(false);
+  const [globalMatchFailed, setGlobalMatchFailed] = useState(false);
+  const [globalMatchError, setGlobalMatchError] = useState('');
 
   /** Guard: prevents handleMatch firing more than once per open session. */
   const hasLoggedRef = useRef(false);
   /** The resolved authoritative elder ID for this session. */
   const elderIdRef = useRef<string | null>(null);
+  /** Whether we're in global matching mode (unknown device). */
+  const globalMatchModeRef = useRef(false);
 
   const name = state.patient?.name?.split(' ')[0] ?? 'Elder';
 
   // ---------------------------------------------------------------------------
-  // Step 1: Resolve authoritative elder ID (CROSS-DEVICE AWARE)
+  // Step 1: Resolve authoritative elder ID for MODE A (known device)
   // ---------------------------------------------------------------------------
   const resolveElderId = useCallback(async (): Promise<string | null> => {
     // Fast path: state already has a real Supabase UUID
@@ -87,8 +95,7 @@ export function FaceLogin({
       return null;
     }
 
-    // Patch app state with the recovered elder identity so subsequent operations
-    // (e.g. FaceEnrollment, FaceSetup) have the real ID without a full re-onboard.
+    // Patch app state with the recovered elder identity
     const restoredPatient: Patient = {
       id: recovered.elderId,
       name: recovered.name ?? state.patient?.name ?? 'Elder',
@@ -109,24 +116,30 @@ export function FaceLogin({
   }, [state.patient, dispatch]);
 
   // ---------------------------------------------------------------------------
-  // Step 2: Fetch enrolled face profile for resolved elder ID
+  // Step 2: Fetch enrolled face profile for resolved elder ID (MODE A)
   // ---------------------------------------------------------------------------
   const fetchProfile = useCallback(async () => {
     setLoadingProfile(true);
-    setNoElder(false);
+    setGlobalMatchFailed(false);
+    setGlobalMatchError('');
 
     try {
       const elderId = await resolveElderId();
 
       if (!elderId) {
-        // No registered elder found — show registration prompt
-        setNoElder(true);
+        // No recovered elder found — enter MODE B (global matching)
+        // eslint-disable-next-line no-console
+        console.info('[FaceLogin] Entering global face identification mode…');
+        elderIdRef.current = null;
+        globalMatchModeRef.current = true;
         setProfile(null);
         setLoadingProfile(false);
         return;
       }
 
+      // MODE A: Known elder — load their face profile
       elderIdRef.current = elderId;
+      globalMatchModeRef.current = false;
 
       // Fast path: IndexedDB cache (keyed by elderId, NOT global)
       let prof = await loadFaceProfile(elderId);
@@ -174,8 +187,9 @@ export function FaceLogin({
     return '';
   };
 
-  // Called when 3 consecutive matches are verified by useFaceRecognition
-  // Receives the matched descriptor as a parameter from the hook
+  // ---------------------------------------------------------------------------
+  // Handle face match callback (both MODE A and MODE B)
+  // ---------------------------------------------------------------------------
   const handleMatch = useCallback(
     async (descriptor?: number[]) => {
       if (hasLoggedRef.current) return;
@@ -184,18 +198,16 @@ export function FaceLogin({
 
       const photo = captureFrame();
 
-      // ── CROSS-DEVICE FACE MATCHING ──────────────────────────────────────
-      // If we don't have an authoritative elder ID yet, attempt face-first matching
-      // using the descriptor that just triggered handleMatch
-      if (!elderIdRef.current && descriptor && descriptor.length === 128) {
+      // MODE B: Global face matching (unknown device)
+      if (globalMatchModeRef.current && descriptor && descriptor.length === 128) {
         // eslint-disable-next-line no-console
-        console.info('[FaceLogin] Attempting cross-device face match with descriptor…');
+        console.info('[FaceLogin] Calling global face matcher…');
 
         const faceMatch = await matchFaceDescriptorGlobally(descriptor);
 
         if (faceMatch.matched && faceMatch.elderId) {
           // eslint-disable-next-line no-console
-          console.info('[FaceLogin] Cross-device face match successful — elderId:', faceMatch.elderId);
+          console.info('[FaceLogin] Global match successful: elderId=', faceMatch.elderId);
 
           // Patch app state with matched elder identity
           const matchedPatient: Patient = {
@@ -212,12 +224,27 @@ export function FaceLogin({
           };
           dispatch({ type: 'RESTORE_ELDER_SESSION', patient: matchedPatient });
           elderIdRef.current = faceMatch.elderId;
-        } else if (!faceMatch.matched) {
+
+          if (state.settings.voiceOn) {
+            speakText(`${name}. ${t('login.success.elder')}`);
+          }
+
+          setTimeout(() => {
+            onSuccess(photo);
+          }, 400);
+          return;
+        } else {
           // eslint-disable-next-line no-console
-          console.warn('[FaceLogin] Cross-device face match failed — face not recognized');
+          console.warn('[FaceLogin] Global face match failed');
+          setGlobalMatchFailed(true);
+          setGlobalMatchError('Face not recognized. Please try again or use PIN.');
+          setVerified(false);
+          hasLoggedRef.current = false;
+          return;
         }
       }
 
+      // MODE A: Local profile matching (existing behavior)
       if (state.settings.voiceOn) {
         speakText(`${name}. ${t('login.success.elder')}`);
       }
@@ -232,6 +259,8 @@ export function FaceLogin({
 
   const face = useFaceRecognition({
     profile,
+    // MODE B: Use global matching when there's no known elder
+    globalMatch: globalMatchModeRef.current,
     onMatch: handleMatch,
   });
 
@@ -249,11 +278,13 @@ export function FaceLogin({
     if (!open) {
       face.cancel();
       setVerified(false);
+      setGlobalMatchFailed(false);
       return;
     }
 
     hasLoggedRef.current = false;
     setVerified(false);
+    setGlobalMatchFailed(false);
 
     void fetchProfile();
 
@@ -263,9 +294,12 @@ export function FaceLogin({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Start face recognition once profile is loaded and verified
+  // Start face recognition once profile is loaded (MODE A) or immediately (MODE B)
   useEffect(() => {
-    if (open && profile?.enrolled && !loadingProfile && !verified) {
+    if (!open || loadingProfile || verified) return;
+
+    const shouldStart = globalMatchModeRef.current || (profile?.enrolled);
+    if (shouldStart) {
       face.start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -299,15 +333,26 @@ export function FaceLogin({
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
               <p className="mt-3 text-sm font-bold text-neutral-600">Checking biometric security profile…</p>
             </div>
-          ) : noElder ? (
-            /* No registered elder session found at all */
+          ) : globalMatchFailed ? (
+            /* Global matching failed — offer PIN fallback */
             <div className="space-y-4 rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-6 text-center">
-              <div className="text-4xl">👤</div>
-              <div className="text-lg font-extrabold text-brand-900">No Elder Profile Found</div>
+              <div className="text-4xl">❌</div>
+              <div className="text-lg font-extrabold text-brand-900">Face Not Recognized</div>
               <p className="text-sm font-semibold text-neutral-600">
-                Please register your face first. There is no active elder account linked to this device.
+                {globalMatchError || 'The face could not be identified. Please try again or use PIN login.'}
               </p>
               <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGlobalMatchFailed(false);
+                    hasLoggedRef.current = false;
+                    face.start();
+                  }}
+                  className="w-full rounded-2xl bg-brand-600 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-brand-700"
+                >
+                  🔄 Try Again
+                </button>
                 <button
                   type="button"
                   onClick={handleUsePin}
@@ -315,17 +360,79 @@ export function FaceLogin({
                 >
                   🔐 {t('face.usePin')}
                 </button>
+              </div>
+            </div>
+          ) : globalMatchModeRef.current && !isEnrolled ? (
+            /* MODE B: Global matching in progress */
+            <div className="flex flex-col items-center">
+              <LiveFaceScanner
+                videoRef={face.videoRef}
+                status={face.status}
+                alignment={face.alignment}
+                faceBox={face.faceBox}
+                debug={{
+                  lastFaceCount: face.lastFaceCount,
+                  lastScore: face.lastScore,
+                  lastDistance: face.lastDistance,
+                  confidence: face.confidence,
+                  matchProgress: face.matchProgress,
+                  attemptCount: face.attemptCount,
+                  modelsReady: face.modelsReady,
+                }}
+              >
+                {/* 3-Match Progress Indicator for global matching */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2" role="progressbar" aria-valuenow={face.matchProgress} aria-valuemin={0} aria-valuemax={3}>
+                    {[1, 2, 3].map((step) => (
+                      <div
+                        key={step}
+                        className={`h-3 w-12 rounded-full transition-all duration-200 ${
+                          verified || face.matchProgress >= step
+                            ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]'
+                            : 'bg-neutral-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="text-xs font-bold text-brand-700">
+                    {verified
+                      ? '✓ Face Identified'
+                      : face.matchProgress > 0
+                      ? `Verifying… ${face.matchProgress}/3 matches`
+                      : 'Looking for face…'}
+                  </div>
+
+                  {face.state === 'failure' && (
+                    <div className="flex w-full flex-col gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          hasLoggedRef.current = false;
+                          face.start();
+                        }}
+                        className="rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow hover:bg-brand-700"
+                      >
+                        🔄 Try Scan Again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </LiveFaceScanner>
+
+              {/* PIN Fallback button */}
+              <div className="mt-4 w-full max-w-md">
                 <button
                   type="button"
-                  onClick={handleClose}
-                  className="w-full rounded-2xl border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-100"
+                  onClick={handleUsePin}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-white px-4 py-3 text-sm font-extrabold text-brand-700 shadow-sm transition hover:bg-brand-50 hover:shadow-card"
                 >
-                  ← Back to Register
+                  🔐 {t('face.usePin')}
                 </button>
               </div>
             </div>
           ) : !isEnrolled ? (
-            /* Elder account exists but no face enrolled yet */
+            /* MODE A: Elder account exists but no face enrolled yet */
             <div className="space-y-4 rounded-2xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-6 text-center">
               <div className="text-4xl">📸</div>
               <div className="text-lg font-extrabold text-brand-900">No Face Enrolled Yet</div>
@@ -350,6 +457,7 @@ export function FaceLogin({
               </div>
             </div>
           ) : (
+            /* MODE A: Known elder with enrolled face profile */
             <div className="flex flex-col items-center">
               <LiveFaceScanner
                 videoRef={face.videoRef}
