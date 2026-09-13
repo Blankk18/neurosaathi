@@ -1,25 +1,22 @@
 // ============================================================================
 // FACE LOGIN — Live Biometric Scan Authentication via Camera
 //
-// ELDER IDENTITY RESOLUTION (in order):
+// CROSS-DEVICE FACE LOGIN (NEW):
 //   1. state.patient?.id — if it's a real Supabase UUID, use it directly.
-//   2. recoverElderIdFromSession() — walks auth.uid() → profiles → elder_profiles
-//      using the active Supabase anonymous session. Dispatches RESTORE_ELDER_SESSION
-//      to persist the recovered identity.
-//   3. No known elder → show "Please register your face first."
-//
-// FACE PROFILE LOADING (after elderId is resolved):
-//   1. loadFaceProfile(elderId) — IndexedDB cache, keyed by elder (fast path)
-//   2. loadFaceEnrollment(elderId) — Supabase (authoritative, if cache empty)
-//   Supabase result is cached to IndexedDB for next load.
-//
-// MATCHING:
-//   useFaceRecognition → 3 consecutive matches → onSuccess
+//   2. matchFaceDescriptorGlobally() — NEW: sends face descriptor to RPC for global matching
+//      - Captures face → generates 128-dim descriptor
+//      - Calls match-face-descriptor RPC (server-side)
+//      - RPC searches ALL active face_enrollments
+//      - Returns matched elder_profiles.id (or null)
+//      - No device/auth chain dependency
+//   3. recoverElderIdFromSession() — FALLBACK for same-device session recovery
+//   4. No known elder → show "Please register your face first."
 //
 // SECURITY:
+//   - Face descriptors never downloaded to browser
+//   - RPC runs server-side with service role
+//   - No device-specific state for identity
 //   - Never falls back to 'patient-1', 'patient-asha', or any local uid()
-//   - Never scans all enrolled users' embeddings
-//   - getPublicUrl() is never called for the private face-enrollments bucket
 // ============================================================================
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -29,6 +26,7 @@ import { LiveFaceScanner } from './LiveFaceScanner';
 import { useFaceRecognition } from './useFaceRecognition';
 import { loadFaceProfile, saveFaceProfile } from './faceRecognition.service';
 import { loadFaceEnrollment } from '@/services/faceDatabaseService';
+import { matchFaceDescriptorGlobally } from '@/services/faceMatchingService';
 import { recoverElderIdFromSession } from '@/services/authService';
 import { FaceEnrollment } from './FaceEnrollment';
 import { DEMO_PATIENT_ID } from '@/data/demoData';
@@ -69,7 +67,7 @@ export function FaceLogin({
   const name = state.patient?.name?.split(' ')[0] ?? 'Elder';
 
   // ---------------------------------------------------------------------------
-  // Step 1: Resolve authoritative elder ID
+  // Step 1: Resolve authoritative elder ID (CROSS-DEVICE AWARE)
   // ---------------------------------------------------------------------------
   const resolveElderId = useCallback(async (): Promise<string | null> => {
     // Fast path: state already has a real Supabase UUID
@@ -77,9 +75,10 @@ export function FaceLogin({
       return state.patient!.id;
     }
 
-    // Slow path: recover from active Supabase anonymous session
     // eslint-disable-next-line no-console
     console.info('[FaceLogin] No real elder UUID in state — attempting session recovery…');
+
+    // FALLBACK: Recover from active Supabase anonymous session (same-device)
     const recovered = await recoverElderIdFromSession();
 
     if (!recovered.success || !recovered.elderId) {
@@ -176,22 +175,60 @@ export function FaceLogin({
   };
 
   // Called when 3 consecutive matches are verified by useFaceRecognition
-  const handleMatch = useCallback(async () => {
-    if (hasLoggedRef.current) return;
-    hasLoggedRef.current = true;
-    setVerified(true);
+  // Receives the matched descriptor as a parameter from the hook
+  const handleMatch = useCallback(
+    async (descriptor?: number[]) => {
+      if (hasLoggedRef.current) return;
+      hasLoggedRef.current = true;
+      setVerified(true);
 
-    const photo = captureFrame();
+      const photo = captureFrame();
 
-    if (state.settings.voiceOn) {
-      speakText(`${name}. ${t('login.success.elder')}`);
-    }
+      // ── CROSS-DEVICE FACE MATCHING ──────────────────────────────────────
+      // If we don't have an authoritative elder ID yet, attempt face-first matching
+      // using the descriptor that just triggered handleMatch
+      if (!elderIdRef.current && descriptor && descriptor.length === 128) {
+        // eslint-disable-next-line no-console
+        console.info('[FaceLogin] Attempting cross-device face match with descriptor…');
 
-    // Short transition before redirect
-    setTimeout(() => {
-      onSuccess(photo);
-    }, 400);
-  }, [name, state.settings.voiceOn, speakText, t, onSuccess]);
+        const faceMatch = await matchFaceDescriptorGlobally(descriptor);
+
+        if (faceMatch.matched && faceMatch.elderId) {
+          // eslint-disable-next-line no-console
+          console.info('[FaceLogin] Cross-device face match successful — elderId:', faceMatch.elderId);
+
+          // Patch app state with matched elder identity
+          const matchedPatient: Patient = {
+            id: faceMatch.elderId,
+            name: faceMatch.name ?? state.patient?.name ?? 'Elder',
+            age: faceMatch.age ?? state.patient?.age ?? 0,
+            language: (faceMatch.language as any) ?? state.patient?.language ?? 'en',
+            region: (faceMatch.region as any) ?? state.patient?.region ?? 'assam',
+            caregiverName: state.patient?.caregiverName ?? '',
+            caregiverRelationship: state.patient?.caregiverRelationship ?? '',
+            interests: state.patient?.interests ?? [],
+            onboarded: true,
+            baselineDone: state.patient?.baselineDone ?? false,
+          };
+          dispatch({ type: 'RESTORE_ELDER_SESSION', patient: matchedPatient });
+          elderIdRef.current = faceMatch.elderId;
+        } else if (!faceMatch.matched) {
+          // eslint-disable-next-line no-console
+          console.warn('[FaceLogin] Cross-device face match failed — face not recognized');
+        }
+      }
+
+      if (state.settings.voiceOn) {
+        speakText(`${name}. ${t('login.success.elder')}`);
+      }
+
+      // Short transition before redirect
+      setTimeout(() => {
+        onSuccess(photo);
+      }, 400);
+    },
+    [name, state.settings.voiceOn, speakText, t, onSuccess, state.patient, dispatch]
+  );
 
   const face = useFaceRecognition({
     profile,
