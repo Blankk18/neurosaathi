@@ -34,8 +34,14 @@ export const REQUIRED_CONSECUTIVE_MATCHES = 3;
 /** Max total recognition cycles before giving up for this attempt. */
 export const MAX_RECOGNITION_ATTEMPTS = 120;
 
-/** During enrollment, gather this many valid face samples. */
-export const ENROLLMENT_SAMPLES = 1;
+/** During enrollment, gather this many valid face samples (configurable: 3 to 5). */
+export const ENROLLMENT_SAMPLES = 5;
+
+/** Required face stability duration before an automatic capture during enrollment (800ms-1200ms). */
+export const ENROLLMENT_STABILITY_MS = 1000;
+
+/** Minimum cooldown in ms between consecutive enrollment captures. */
+export const ENROLLMENT_COOLDOWN_MS = 1500;
 
 /** Minimum landmark shift (px, normalised) that counts as "movement". */
 export const LIVENESS_MIN_MOVEMENT = 0.02;

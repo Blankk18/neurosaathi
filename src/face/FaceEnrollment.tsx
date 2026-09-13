@@ -43,8 +43,11 @@ import { ENROLLMENT_SAMPLES } from './faceRecognition.config';
 import type { FaceSample } from './types';
 
 const GUIDED_PROMPTS = [
-  "Let's set up face recognition. Look at the camera.",
-  'Hold still…',
+  'Look at the camera',
+  'Keep looking at the camera',
+  'Slightly turn your face',
+  'Look slightly the other way',
+  'Look at the camera again',
 ];
 
 export function FaceEnrollment({
@@ -82,12 +85,9 @@ export function FaceEnrollment({
     },
   });
 
-  // Calculate current guide step based on collected samples (0 to 5)
-  const currentStepIdx = Math.min(
-    GUIDED_PROMPTS.length - 1,
-    Math.floor((samples.length / ENROLLMENT_SAMPLES) * GUIDED_PROMPTS.length)
-  );
-  const currentPrompt = GUIDED_PROMPTS[currentStepIdx];
+  // Calculate current guide step based on collected samples (0 to ENROLLMENT_SAMPLES - 1)
+  const currentStepIdx = Math.min(samples.length, GUIDED_PROMPTS.length - 1);
+  const currentPrompt = GUIDED_PROMPTS[currentStepIdx] || GUIDED_PROMPTS[0];
 
   // Speak prompt when step changes
   useEffect(() => {
@@ -398,28 +398,50 @@ export function FaceEnrollment({
             }}
           >
             <div className="flex flex-col items-center gap-3">
-              <div className="w-full max-w-sm rounded-xl bg-brand-50 px-4 py-2 text-center text-sm font-extrabold text-brand-800 border border-brand-200 shadow-sm animate-pulse">
+              <div className="w-full max-w-sm rounded-xl bg-brand-50 px-4 py-2.5 text-center text-sm font-extrabold text-brand-900 border border-brand-200 shadow-sm">
                 {currentPrompt}
               </div>
-              <div className="flex items-center gap-1" role="progressbar" aria-valuemin={0} aria-valuemax={ENROLLMENT_SAMPLES} aria-valuenow={collected}>
+
+              {/* Progress dots for ENROLLMENT_SAMPLES */}
+              <div className="flex items-center gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={ENROLLMENT_SAMPLES} aria-valuenow={collected}>
                 {Array.from({ length: ENROLLMENT_SAMPLES }).map((_, i) => (
                   <span
                     key={i}
-                    className={`h-3 w-6 rounded-full transition-colors duration-300 ${i < collected ? 'bg-emerald-500' : 'bg-neutral-200'}`}
+                    className={`h-3 w-8 rounded-full transition-all duration-300 ${
+                      i < collected
+                        ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                        : i === collected
+                        ? 'bg-brand-500 ring-2 ring-brand-300 ring-offset-1 animate-pulse'
+                        : 'bg-neutral-200'
+                    }`}
                     aria-hidden
                   />
                 ))}
               </div>
-              {/* "Capturing face sample N of 10" as required */}
-              <div className="text-sm font-bold text-brand-700">
-                {collected > 0
-                  ? `Capturing face sample ${collected} of ${ENROLLMENT_SAMPLES}`
-                  : t('face.samples', { current: collected, total: ENROLLMENT_SAMPLES })}
+
+              {/* Countdown / Cooldown / Status indication */}
+              <div className="flex flex-col items-center gap-1">
+                {face.countdown != null ? (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-1 text-sm font-extrabold text-white shadow-sm animate-bounce">
+                    <span>📸 Capturing in {face.countdown}…</span>
+                  </div>
+                ) : face.cooldownActive ? (
+                  <div className="text-xs font-semibold text-neutral-500 animate-pulse">
+                    Hold still for next photo…
+                  </div>
+                ) : null}
+
+                <div className="text-sm font-bold text-brand-800">
+                  {collected >= ENROLLMENT_SAMPLES
+                    ? 'Face setup complete!'
+                    : `Photo ${collected + 1} of ${ENROLLMENT_SAMPLES}`}
+                </div>
               </div>
+
               {face.status.state !== 'error' && (
                 <button
                   onClick={face.cancel}
-                  className="rounded-full bg-white px-5 py-3 text-base font-bold text-brand-700 shadow-card hover:bg-brand-50 transition"
+                  className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-brand-700 shadow-card hover:bg-brand-50 transition"
                 >
                   {t('face.cancel')}
                 </button>

@@ -4,6 +4,7 @@ import { useApp } from '@/state/AppContext';
 import { HomeIcon, GamesIcon, BellIcon, HeartsIcon, ChartIcon, GridIcon, UserIcon, LightbulbIcon, AlertIcon, SpeakerIcon, StopIcon, ShieldIcon, CameraIcon } from './Icons';
 import { AccessibilityControls, LanguageSelector, OfflineBadge } from './common';
 import { Modal, Toast } from './ui';
+import { signOut } from '@/services/authService';
 
 // ============================================================================
 // Patient shell — big bottom navigation, calm top bar, tablet/mobile first.
@@ -83,7 +84,8 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
 }
 
 function PatientTopBar() {
-  const { t, state, speakText, stopSpeaking } = useApp();
+  const { t, state, dispatch, speakText, stopSpeaking } = useApp();
+  const navigate = useNavigate();
   const [showA11y, setShowA11y] = useState(false);
   const name = state.patient?.name ?? t('home.friend');
   return (
@@ -124,6 +126,20 @@ function PatientTopBar() {
             ♿
           </button>
           <LanguageSelector compact />
+
+          <button
+            onClick={async () => {
+              await signOut();
+              dispatch({ type: 'CLEAR_ELDER_SESSION' });
+              navigate('/login');
+            }}
+            aria-label="Log out"
+            title="Log out"
+            className="flex h-10 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold text-neutral-600 shadow-card hover:bg-neutral-50 hover:text-danger-600 transition"
+          >
+            <span aria-hidden>🚪</span>
+            <span className="hidden sm:inline">Logout</span>
+          </button>
 
           <Modal open={showA11y} onClose={() => setShowA11y(false)} title={`♿ ${t('a11y.title')}`}>
             <div className="max-h-[70vh] overflow-y-auto">

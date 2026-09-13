@@ -63,7 +63,9 @@ export type Action =
    * recoverElderIdFromSession() succeeds. Only updates patient + role;
    * does not overwrite game results, reminders, or other state.
    */
-  | { type: 'RESTORE_ELDER_SESSION'; patient: Patient };
+  | { type: 'RESTORE_ELDER_SESSION'; patient: Patient }
+  /** Clears active elder session on logout for cross-device & multi-user support. */
+  | { type: 'CLEAR_ELDER_SESSION' };
 
 function todayTimelineTime(): string {
   const d = new Date();
@@ -77,6 +79,15 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'RESET':
       return buildDemoState();
+
+    case 'CLEAR_ELDER_SESSION': {
+      return {
+        ...state,
+        currentRole: 'elder',
+        patient: null,
+        onboarded: false,
+      };
+    }
 
     case 'RESTORE_ELDER_SESSION': {
       return {

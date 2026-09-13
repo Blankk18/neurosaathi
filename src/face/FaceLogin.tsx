@@ -64,15 +64,17 @@ export function FaceLogin({
   const [verified, setVerified] = useState(false);
   const [globalMatchFailed, setGlobalMatchFailed] = useState(false);
   const [globalMatchError, setGlobalMatchError] = useState('');
+  const [matchedElderName, setMatchedElderName] = useState('');
+  const [globalMatchMode, setGlobalMatchMode] = useState(false);
 
   /** Guard: prevents handleMatch firing more than once per open session. */
   const hasLoggedRef = useRef(false);
+  /** Lock: prevents parallel / high-frequency calls to the global face matcher RPC. */
+  const globalMatchingInProgressRef = useRef(false);
   /** The resolved authoritative elder ID for this session. */
   const elderIdRef = useRef<string | null>(null);
   /** Whether we're in global matching mode (unknown device). */
   const globalMatchModeRef = useRef(false);
-
-  const name = state.patient?.name?.split(' ')[0] ?? 'Elder';
 
   // ---------------------------------------------------------------------------
   // Step 1: Resolve authoritative elder ID for MODE A (known device)
@@ -122,6 +124,7 @@ export function FaceLogin({
     setLoadingProfile(true);
     setGlobalMatchFailed(false);
     setGlobalMatchError('');
+    setMatchedElderName('');
 
     try {
       const elderId = await resolveElderId();
@@ -129,9 +132,10 @@ export function FaceLogin({
       if (!elderId) {
         // No recovered elder found — enter MODE B (global matching)
         // eslint-disable-next-line no-console
-        console.info('[FaceLogin] Entering global face identification mode…');
+        console.info('[FaceLogin] Global face identification mode');
         elderIdRef.current = null;
         globalMatchModeRef.current = true;
+        setGlobalMatchMode(true);
         setProfile(null);
         setLoadingProfile(false);
         return;
@@ -140,6 +144,7 @@ export function FaceLogin({
       // MODE A: Known elder — load their face profile
       elderIdRef.current = elderId;
       globalMatchModeRef.current = false;
+      setGlobalMatchMode(false);
 
       // Fast path: IndexedDB cache (keyed by elderId, NOT global)
       let prof = await loadFaceProfile(elderId);
@@ -154,10 +159,22 @@ export function FaceLogin({
         }
       }
 
-      setProfile(prof);
+      if (!prof || !prof.enrolled || prof.samples.length === 0) {
+        // If the recovered session elder has no face enrolled, switch to global mode
+        // so ANY registered elder can still log in with their face!
+        // eslint-disable-next-line no-console
+        console.info('[FaceLogin] No local enrollment found for session elder — switching to global identification');
+        globalMatchModeRef.current = true;
+        setGlobalMatchMode(true);
+        setProfile(null);
+      } else {
+        setProfile(prof);
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('[FaceLogin] Error loading face profile:', err);
+      console.warn('[FaceLogin] Error loading face profile — falling back to global match:', err);
+      globalMatchModeRef.current = true;
+      setGlobalMatchMode(true);
       setProfile(null);
     } finally {
       setLoadingProfile(false);
@@ -193,26 +210,31 @@ export function FaceLogin({
   const handleMatch = useCallback(
     async (descriptor?: number[]) => {
       if (hasLoggedRef.current) return;
-      hasLoggedRef.current = true;
-      setVerified(true);
+      if (globalMatchingInProgressRef.current) return;
+      globalMatchingInProgressRef.current = true;
 
       const photo = captureFrame();
 
-      // MODE B: Global face matching (unknown device)
-      if (globalMatchModeRef.current && descriptor && descriptor.length === 128) {
+      // MODE B: Global face matching (unknown device or cross-device)
+      if ((globalMatchModeRef.current || !profile?.enrolled) && descriptor && descriptor.length === 128) {
         // eslint-disable-next-line no-console
-        console.info('[FaceLogin] Calling global face matcher…');
+        console.info('[FaceLogin] Calling global matcher');
 
         const faceMatch = await matchFaceDescriptorGlobally(descriptor);
 
         if (faceMatch.matched && faceMatch.elderId) {
           // eslint-disable-next-line no-console
-          console.info('[FaceLogin] Global match successful: elderId=', faceMatch.elderId);
+          console.info(`[FaceLogin] Global match successful: elderId=${faceMatch.elderId}`);
+          hasLoggedRef.current = true;
+          const finalName = faceMatch.name || 'Elder';
+          setMatchedElderName(finalName);
+          // CRITICAL: set verified ONLY after confirmed server match
+          setVerified(true);
 
           // Patch app state with matched elder identity
           const matchedPatient: Patient = {
             id: faceMatch.elderId,
-            name: faceMatch.name ?? state.patient?.name ?? 'Elder',
+            name: finalName,
             age: faceMatch.age ?? state.patient?.age ?? 0,
             language: (faceMatch.language as any) ?? state.patient?.language ?? 'en',
             region: (faceMatch.region as any) ?? state.patient?.region ?? 'assam',
@@ -226,41 +248,46 @@ export function FaceLogin({
           elderIdRef.current = faceMatch.elderId;
 
           if (state.settings.voiceOn) {
-            speakText(`${name}. ${t('login.success.elder')}`);
+            speakText(`Welcome back, ${finalName.split(' ')[0]}. ${t('login.success.elder')}`);
           }
 
           setTimeout(() => {
             onSuccess(photo);
-          }, 400);
+          }, 500);
           return;
         } else {
           // eslint-disable-next-line no-console
-          console.warn('[FaceLogin] Global face match failed');
+          console.warn('[FaceLogin] Global match failed');
+          setVerified(false);
           setGlobalMatchFailed(true);
           setGlobalMatchError('Face not recognized. Please try again or use PIN.');
-          setVerified(false);
           hasLoggedRef.current = false;
+          globalMatchingInProgressRef.current = false;
           return;
         }
       }
 
-      // MODE A: Local profile matching (existing behavior)
+      // MODE A: Local profile matching verified
+      const currentName = state.patient?.name?.split(' ')[0] || 'Elder';
+      setMatchedElderName(currentName);
+      setVerified(true);
+      hasLoggedRef.current = true;
+
       if (state.settings.voiceOn) {
-        speakText(`${name}. ${t('login.success.elder')}`);
+        speakText(`Welcome back, ${currentName}. ${t('login.success.elder')}`);
       }
 
-      // Short transition before redirect
       setTimeout(() => {
         onSuccess(photo);
-      }, 400);
+      }, 500);
     },
-    [name, state.settings.voiceOn, speakText, t, onSuccess, state.patient, dispatch]
+    [profile, state.settings.voiceOn, speakText, t, onSuccess, state.patient, dispatch]
   );
 
   const face = useFaceRecognition({
     profile,
-    // MODE B: Use global matching when there's no known elder
-    globalMatch: globalMatchModeRef.current,
+    // MODE B: Use global matching when there's no known elder or switched to global
+    globalMatch: globalMatchMode || globalMatchModeRef.current,
     onMatch: handleMatch,
   });
 
@@ -298,12 +325,12 @@ export function FaceLogin({
   useEffect(() => {
     if (!open || loadingProfile || verified) return;
 
-    const shouldStart = globalMatchModeRef.current || (profile?.enrolled);
+    const shouldStart = globalMatchMode || globalMatchModeRef.current || (profile?.enrolled);
     if (shouldStart) {
       face.start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, profile, loadingProfile]);
+  }, [open, profile, loadingProfile, verified, globalMatchMode]);
 
   const handleClose = () => {
     face.cancel();
@@ -324,7 +351,9 @@ export function FaceLogin({
           <div className="text-center">
             <div className="text-xl font-extrabold text-brand-900">🛡️ {t('face.title')}</div>
             <div className="mt-1 text-sm font-semibold text-neutral-500">
-              {t('face.welcome', { name })}
+              {verified && matchedElderName
+                ? `Welcome back, ${matchedElderName}!`
+                : 'Look at the camera to identify yourself.'}
             </div>
           </div>
 
@@ -346,7 +375,10 @@ export function FaceLogin({
                   type="button"
                   onClick={() => {
                     setGlobalMatchFailed(false);
+                    setGlobalMatchError('');
+                    setVerified(false);
                     hasLoggedRef.current = false;
+                    globalMatchingInProgressRef.current = false;
                     face.start();
                   }}
                   className="w-full rounded-2xl bg-brand-600 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-brand-700"
@@ -362,7 +394,7 @@ export function FaceLogin({
                 </button>
               </div>
             </div>
-          ) : globalMatchModeRef.current && !isEnrolled ? (
+          ) : (globalMatchMode || globalMatchModeRef.current) && !isEnrolled ? (
             /* MODE B: Global matching in progress */
             <div className="flex flex-col items-center">
               <LiveFaceScanner
@@ -397,9 +429,11 @@ export function FaceLogin({
 
                   <div className="text-xs font-bold text-brand-700">
                     {verified
-                      ? '✓ Face Identified'
+                      ? `✓ Face Identified — Welcome ${matchedElderName || ''}`
+                      : globalMatchingInProgressRef.current
+                      ? 'Identifying you…'
                       : face.matchProgress > 0
-                      ? `Verifying… ${face.matchProgress}/3 matches`
+                      ? 'Hold still…'
                       : 'Looking for face…'}
                   </div>
 
@@ -408,7 +442,11 @@ export function FaceLogin({
                       <button
                         type="button"
                         onClick={() => {
+                          setGlobalMatchFailed(false);
+                          setGlobalMatchError('');
+                          setVerified(false);
                           hasLoggedRef.current = false;
+                          globalMatchingInProgressRef.current = false;
                           face.start();
                         }}
                         className="rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow hover:bg-brand-700"
@@ -491,9 +529,9 @@ export function FaceLogin({
 
                   <div className="text-xs font-bold text-brand-700">
                     {verified
-                      ? '✓ Biometric Match Confirmed'
+                      ? `✓ Face Identified — Welcome ${matchedElderName || ''}`
                       : face.matchProgress > 0
-                      ? `Verifying… ${face.matchProgress}/3 matches`
+                      ? 'Hold still…'
                       : 'Looking for face…'}
                   </div>
 
@@ -508,6 +546,21 @@ export function FaceLogin({
                         className="rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow hover:bg-brand-700"
                       >
                         🔄 Try Scan Again
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          globalMatchModeRef.current = true;
+                          setGlobalMatchMode(true);
+                          setProfile(null);
+                          hasLoggedRef.current = false;
+                          globalMatchingInProgressRef.current = false;
+                          setVerified(false);
+                          face.start();
+                        }}
+                        className="rounded-xl border border-brand-200 bg-white px-4 py-2 text-xs font-bold text-brand-800 shadow-sm hover:bg-brand-50 transition"
+                      >
+                        🌐 Not {state.patient?.name?.split(' ')[0] || 'this elder'}? Switch to Global Face Search
                       </button>
                     </div>
                   )}

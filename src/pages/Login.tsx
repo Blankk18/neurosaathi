@@ -39,10 +39,12 @@ function ElderCard({
   onFace,
   onRegister,
   onPin,
+  onSwitchProfile,
 }: {
   onFace: () => void;
   onRegister: () => void;
   onPin: () => void;
+  onSwitchProfile: () => void;
 }) {
   const { state, t } = useApp();
   const hasRealElderProfile = isRealElderUuid(state.patient?.id);
@@ -88,10 +90,10 @@ function ElderCard({
             </button>
             <button
               type="button"
-              onClick={onRegister}
+              onClick={onSwitchProfile}
               className="mt-1 text-sm font-semibold text-neutral-400 hover:text-brand-700 transition text-center"
             >
-              Not you? Register a new elder profile →
+              Not {name || 'you'}? Switch profile or sign in with another face →
             </button>
           </>
         ) : (
@@ -361,8 +363,13 @@ export default function Login() {
   const [faceRole, setFaceRole] = useState<Role>('elder');
 
   const handleRegister = () => {
+    dispatch({ type: 'CLEAR_ELDER_SESSION' });
     dispatch({ type: 'SET_ROLE', role: 'elder' });
     navigate('/onboarding?register=1');
+  };
+
+  const handleSwitchProfile = () => {
+    dispatch({ type: 'CLEAR_ELDER_SESSION' });
   };
 
   const handleElderFace = () => {
@@ -473,6 +480,7 @@ export default function Login() {
                   onFace={handleElderFace}
                   onRegister={handleRegister}
                   onPin={handleElderPin}
+                  onSwitchProfile={handleSwitchProfile}
                 />
                 <CaregiverCard onFace={handleCaregiverFace} />
               </div>
