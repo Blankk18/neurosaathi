@@ -48,7 +48,8 @@ export interface FaceHookOptions {
   /** When true, collect samples instead of matching against a profile. */
   enroll?: boolean;
   onSample?: (sample: FaceSample) => void;
-  onMatch?: () => void;
+  /** Called when 3 consecutive matches are verified. Receives the matched descriptor. */
+  onMatch?: (descriptor?: number[]) => void;
 }
 
 export interface FaceHookResult {
@@ -372,7 +373,9 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         if (next >= REQUIRED_CONSECUTIVE_MATCHES) {
           runningRef.current = false;
           setSnap('success', 'face.recognized');
-          window.setTimeout(() => optsRef.current.onMatch?.(), 300);
+          // Pass the descriptor to onMatch so the component can use it for cross-device matching
+          const descriptor = Array.from(face.descriptor as Float32Array);
+          window.setTimeout(() => optsRef.current.onMatch?.(descriptor), 300);
           cleanup();
           return;
         }
