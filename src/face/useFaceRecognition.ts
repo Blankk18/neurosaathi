@@ -51,6 +51,8 @@ export interface FaceHookOptions {
   globalMatch?: boolean;
   onSample?: (sample: FaceSample) => void;
   onMatch?: (descriptor?: number[]) => void;
+  /** Countdown state for enrollment: seconds remaining (3, 2, 1, 0 then capture) */
+  onCountdownTick?: (remaining: number) => void;
 }
 
 export interface FaceHookResult {
@@ -71,6 +73,8 @@ export interface FaceHookResult {
   lastScore: number | null;
   /** Number of faces in last frame (for DEV debug). */
   lastFaceCount: number;
+  /** ENROLLMENT: countdown tick for automatic photo capture (0 = off, 3/2/1 = counting) */
+  countdownTick: number;
   cancel: () => void;
   start: () => void;
   modelsReady: boolean;
@@ -156,6 +160,14 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
   const [state, setState] = useState<FaceLoginState>('idle');
   const [status, setStatus] = useState<FaceStatusInfo>({ state: 'idle', key: 'face.cancel' });
 
+  // ENROLLMENT: Automatic capture with countdown
+  // countdownTick: 0 = not counting, 3/2/1 = counting down, -1 = captured (wait before next)
+  const [countdownTick, setCountdownTick] = useState(0);
+  const countdownIntervalRef = useRef<number | null>(null);
+  const validFaceFramesRef = useRef(0);
+  const COUNTDOWN_START = 3;
+  const STABLE_FRAMES_BEFORE_COUNTDOWN = 10; // ~2 seconds at ~5 Hz recognition
+
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const profileRef = useRef(opts.profile);
@@ -183,13 +195,19 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    if (countdownIntervalRef.current != null) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     runningRef.current = false;
     isProcessingRef.current = false;
     consecutiveRef.current = 0;
     attemptsRef.current = 0;
     noFaceFramesRef.current = 0;
+    validFaceFramesRef.current = 0;
     livenessRef.current = { prev: null, count: 0 };
     setMatchProgress(0);
+    setCountdownTick(0);
     setFaceBox(null);
     stopStream(streamRef.current);
     releaseVideo(videoRef.current);
@@ -283,54 +301,111 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         }
       }
 
-      // ------------- enrollment path: collect a valid sample -------------
+      // ------------- enrollment path: automatic capture with countdown validation-first ----------
       if (optsRef.current.enroll) {
-        // Enrollment still benefits from a little movement variety.
-        const lv = livenessRef.current;
-        // Accept the first sample without movement, then require movement.
-        const needMovement = attemptsRef.current > 0;
-        if (needMovement && !movementDetected(align, lv.prev)) {
-          setSnap('faceDetected', 'face.hold');
-          lv.prev = align;
-          return;
-        }
+        // AUTOMATIC ENROLLMENT FLOW FOR ELDERLY:
+        // 1. Wait for valid face (centered, good quality, fully in frame, high detection score)
+        // 2. Once valid, accumulate stable frames
+        // 3. After STABLE_FRAMES_BEFORE_COUNTDOWN valid frames, start 3-second countdown
+        // 4. If face moves/invalid during countdown, cancel and restart
+        // 5. After countdown completes, auto-capture
+        // NO manual confirmation button needed
 
-        // Additional enrollment validation: reject low quality, face outside frame, low detection score
+        const lv = livenessRef.current;
+        const detectionScore = face.detection.score ?? 0;
+
+        // VALIDATION CHECKS — if any fails, reset progress and show appropriate guidance
         // Quality threshold: alignmentFor returns 0..1, reject below 0.5
         if (align.quality < 0.5) {
           setSnap('faceDetected', 'face.lowQuality');
+          validFaceFramesRef.current = 0;
+          if (countdownTick > 0) {
+            // Countdown was active; cancel it
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+            setCountdownTick(0);
+          }
           lv.prev = align;
           return;
         }
 
         // Face box must be fully inside the video frame (not partially outside)
-        // video.videoWidth / video.videoHeight are the frame dimensions
         const vw = video.videoWidth;
         const vh = video.videoHeight;
         if (box.x < 0 || box.y < 0 || box.x + box.width > vw || box.y + box.height > vh) {
           setSnap('faceDetected', 'face.offFrame');
+          validFaceFramesRef.current = 0;
+          if (countdownTick > 0) {
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+            setCountdownTick(0);
+          }
           lv.prev = align;
           return;
         }
 
         // Detection score must meet the primary threshold (not relaxed)
-        const detectionScore = face.detection.score ?? 0;
         if (detectionScore < DETECTOR_SCORE_THRESHOLD) {
           setSnap('faceDetected', 'face.lowScore');
+          validFaceFramesRef.current = 0;
+          if (countdownTick > 0) {
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+            setCountdownTick(0);
+          }
           lv.prev = align;
           return;
         }
 
+        // Face is valid at this frame
+        validFaceFramesRef.current += 1;
         lv.prev = align;
-        attemptsRef.current += 1;
-        setAttemptCount(attemptsRef.current);
-        setSnap('faceDetected', 'face.capture');
 
-        // Capture the video frame as a Blob at this exact moment —
-        // the same frame that produced this descriptor. Non-fatal if capture
-        // fails (imageBlob will be undefined; FaceEnrollment checks completeness).
-        const imageBlob = await captureFrameAsBlob(video);
-        optsRef.current.onSample?.(toSample(face.descriptor as Float32Array, imageBlob));
+        // NOT YET in countdown — accumulating stable frames
+        if (countdownTick === 0) {
+          if (validFaceFramesRef.current < STABLE_FRAMES_BEFORE_COUNTDOWN) {
+            // Still waiting for stability
+            setSnap('faceDetected', 'face.hold');
+            return;
+          }
+
+          // Stable frames reached — start countdown
+          setSnap('detecting', 'face.keep');
+          let tick = COUNTDOWN_START;
+          optsRef.current.onCountdownTick?.(tick);
+          setCountdownTick(tick);
+
+          countdownIntervalRef.current = window.setInterval(() => {
+            tick -= 1;
+            if (tick > 0) {
+              optsRef.current.onCountdownTick?.(tick);
+              setCountdownTick(tick);
+            } else {
+              // Countdown complete — capture NOW
+              if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+              }
+              setCountdownTick(-1); // -1 = just captured, wait before next
+
+              // Perform immediate capture
+              void (async () => {
+                const imageBlob = await captureFrameAsBlob(video);
+                attemptsRef.current += 1;
+                setAttemptCount(attemptsRef.current);
+                validFaceFramesRef.current = 0; // Reset for next photo
+                setCountdownTick(0);
+                optsRef.current.onCountdownTick?.(0);
+                optsRef.current.onSample?.(toSample(face.descriptor as Float32Array, imageBlob));
+              })();
+            }
+          }, 1000);
+
+          return;
+        }
+
+        // Already in countdown or just captured — do nothing, let timer run
+        setSnap('detecting', 'face.keep');
         return;
       }
 
@@ -551,6 +626,7 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
     lastDistance,
     lastScore,
     lastFaceCount,
+    countdownTick,
     cancel,
     start,
     modelsReady,

@@ -1,34 +1,25 @@
 // ============================================================================
-// FACE ENROLLMENT — single-photo face registration for cross-device login.
+// FACE ENROLLMENT — Automatic 3-photo enrollment for elderly dementia patients
 //
-// COMPLETE FLOW (mandatory for elder registration):
-//   1. Camera opens via useFaceRecognition(enroll: true)
-//   2. Hook collects ENROLLMENT_SAMPLES (1) real face sample.
-//      Sample = { descriptor: number[128], capturedAt, imageBlob: Blob }
-//      The imageBlob is the JPEG frame captured at the exact same tick that
-//      produced the descriptor — guaranteed 1-to-1 correspondence.
-//   3. On 1 sample collected:
-//      a) Upload the JPEG blob to private Supabase Storage bucket
-//         'face-enrollments' under path {authUserId}/{enrollmentId}/sample-01.jpg
-//         (Storage RLS verifies auth ownership via auth.uid())
-//      b) Upsert face_enrollments row with:
-//           embedding   = JSON of descriptor (128-dimensional vector)
-//           sample_count = 1
-//           photo_paths  = [storage path]
-//           is_active    = true
-//           elder_id     = elder_profiles.id (authoritative identity)
-//      c) On success: save descriptor-only profile to IndexedDB as cache
-//         (no blobs in IndexedDB — the blob is already in Storage)
-//   4. onEnrolled() is called ONLY after BOTH storage upload AND DB write succeed.
-//   5. If upload fails: show error, allow retry. Do NOT call onEnrolled.
-//   6. If DB write fails: clean up uploaded image, show error, allow retry.
-//   7. Cross-device login: captures a new face, generates descriptor, compares to stored descriptor.
-//      No device-specific state — all identity stored in Supabase.
+// HANDS-FREE AUTOMATIC FLOW:
+//   1. Camera opens
+//   2. Show "Look at the camera"
+//   3. Wait for valid face (centered, quality, fully in frame, high detection score)
+//   4. Accumulate stable frames
+//   5. Once stable → show 3... 2... 1... (countdown)
+//   6. Auto-capture Photo 1
+//   7. Show "Great! Photo 1 of 3"
+//   8. Repeat for Photos 2 ("Please smile") and 3 ("Look at the camera again")
+//   9. On 3 photos collected → "Face setup complete!"
+//
+// NO manual confirmation buttons needed.
+// Face must be valid before countdown starts.
+// If face moves during countdown, countdown cancels and waits again.
 // ============================================================================
 
 import { useEffect, useState, useRef } from 'react';
 import { useApp } from '@/state/AppContext';
-import { Button, Modal } from '@/components/ui';
+import { Modal } from '@/components/ui';
 import { LiveFaceScanner } from './LiveFaceScanner';
 import { useFaceRecognition } from './useFaceRecognition';
 import { saveFaceProfile, buildFaceProfile, resetFaceProfile } from './faceRecognition.service';
@@ -42,9 +33,17 @@ import { supabase } from '@/services/supabase';
 import { ENROLLMENT_SAMPLES } from './faceRecognition.config';
 import type { FaceSample } from './types';
 
-const GUIDED_PROMPTS = [
-  "Let's set up face recognition. Look at the camera.",
-  'Hold still…',
+// Three automatic prompts — one per photo
+const PHOTO_PROMPTS = [
+  "Look at the camera",      // Photo 1
+  "Please smile",             // Photo 2
+  "Look at the camera again", // Photo 3
+];
+
+const PHOTO_SUCCESS_MESSAGES = [
+  "Great! Photo 1 of 3",
+  "Great! Photo 2 of 3",
+  "Great! Photo 3 of 3",
 ];
 
 export function FaceEnrollment({
@@ -66,12 +65,13 @@ export function FaceEnrollment({
   const [saving, setSaving] = useState(false);
   const [savedToCloud, setSavedToCloud] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
+  const [countdownDisplay, setCountdownDisplay] = useState<number | null>(null); // null = no countdown, 3/2/1 = showing
+  const [justCaptured, setJustCaptured] = useState(false); // Show "Photo X of 3" message after capture
   const lastSpokenStep = useRef<number>(-1);
+  const lastSpokenCountdown = useRef<number>(-1);
   // authUserId: the Supabase auth.uid() for the current anonymous session.
-  // Used as the FIRST folder segment in Storage paths so RLS can match auth.uid().
   const authUserIdRef = useRef<string | null>(null);
-  // enrollmentId: unique UUID per attempt. Generated fresh on each start/retry.
-  // Used as the SECOND folder segment — ensures no path collisions between retries.
+  // enrollmentId: unique UUID per attempt.
   const enrollmentIdRef = useRef<string>(crypto.randomUUID());
 
   const face = useFaceRecognition({
@@ -79,26 +79,42 @@ export function FaceEnrollment({
     enroll: true,
     onSample: (sample) => {
       setSamples((prev) => (prev.length >= ENROLLMENT_SAMPLES ? prev : [...prev, sample]));
+      setJustCaptured(true);
+      // Auto-dismiss "Photo X of 3" message after 1.5 seconds
+      setTimeout(() => setJustCaptured(false), 1500);
+    },
+    onCountdownTick: (remaining) => {
+      if (remaining === 0) {
+        setCountdownDisplay(null);
+      } else {
+        setCountdownDisplay(remaining);
+      }
     },
   });
 
-  // Calculate current guide step based on collected samples (0 to 5)
-  const currentStepIdx = Math.min(
-    GUIDED_PROMPTS.length - 1,
-    Math.floor((samples.length / ENROLLMENT_SAMPLES) * GUIDED_PROMPTS.length)
-  );
-  const currentPrompt = GUIDED_PROMPTS[currentStepIdx];
+  // Current photo index (0, 1, or 2)
+  const currentPhotoIdx = Math.min(2, samples.length);
+  const currentPrompt = PHOTO_PROMPTS[currentPhotoIdx];
+  const currentSuccessMessage = PHOTO_SUCCESS_MESSAGES[currentPhotoIdx];
 
-  // Speak prompt when step changes
+  // Speak prompt when it changes
   useEffect(() => {
-    if (!open || done || currentStepIdx === lastSpokenStep.current) return;
-    lastSpokenStep.current = currentStepIdx;
+    if (!open || done || countdownDisplay !== null || justCaptured) return;
+    if (currentPhotoIdx === lastSpokenStep.current) return;
+    lastSpokenStep.current = currentPhotoIdx;
     if (state.settings.voiceOn) {
       speakText(currentPrompt);
     }
-  }, [open, done, currentStepIdx, currentPrompt, speakText, state.settings.voiceOn]);
+  }, [open, done, currentPhotoIdx, currentPrompt, countdownDisplay, justCaptured, speakText, state.settings.voiceOn]);
 
-  // start scanning when the modal opens; always release the camera on close
+  // Speak countdown numbers
+  useEffect(() => {
+    if (!countdownDisplay || !state.settings.voiceOn || countdownDisplay === lastSpokenCountdown.current) return;
+    lastSpokenCountdown.current = countdownDisplay;
+    speakText(countdownDisplay.toString());
+  }, [countdownDisplay, state.settings.voiceOn, speakText]);
+
+  // Start scanning when the modal opens
   useEffect(() => {
     if (!open) return;
     setSamples([]);
@@ -108,10 +124,12 @@ export function FaceEnrollment({
     setSaving(false);
     setSavedToCloud(false);
     setUploadProgress('');
+    setCountdownDisplay(null);
+    setJustCaptured(false);
     lastSpokenStep.current = -1;
-    // Generate a fresh enrollmentId for this open session
+    lastSpokenCountdown.current = -1;
     enrollmentIdRef.current = crypto.randomUUID();
-    // Fetch the current Supabase auth user — needed for Storage path
+    // Fetch the current Supabase auth user
     void supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
         authUserIdRef.current = data.user.id;
@@ -130,7 +148,7 @@ export function FaceEnrollment({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // react to collected sample count
+  // React to collected sample count
   useEffect(() => {
     if (samples.length >= ENROLLMENT_SAMPLES && !done) {
       setDone(true);
@@ -139,15 +157,13 @@ export function FaceEnrollment({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [samples]);
 
-  // persist profile once enrollment completes
+  // Persist profile once enrollment completes
   useEffect(() => {
     if (!done) return;
 
     const patientId = elderId || state.patient?.id || '';
 
-    // Guard: patient.id MUST be a real Supabase UUID (36 chars with hyphens).
-    // A local uid('patient') would be rejected by Supabase RLS anyway, so
-    // we fail early with a clear message.
+    // Guard: patient.id MUST be a real Supabase UUID
     const isSupabaseId = patientId.length === 36 && patientId.includes('-');
 
     if (!isSupabaseId) {
@@ -164,9 +180,7 @@ export function FaceEnrollment({
       setFailed(false);
       setFailMessage('');
 
-      // ── Step 1: Resolve auth user ─────────────────────────────────────────
-      // authUserId is used as Storage folder root so RLS (auth.uid()::text) passes.
-      // patientId (elder_profiles.id) is used only for the DB face_enrollments row.
+      // Resolve auth user
       if (!authUserIdRef.current) {
         const { data: freshUser } = await supabase.auth.getUser();
         if (freshUser?.user) {
@@ -188,9 +202,8 @@ export function FaceEnrollment({
         `[FaceEnrollment] persist — authUserId: ${resolvedAuthUserId}, enrollmentId: ${enrollmentId}, patientId: ${patientId}`
       );
 
-      // ── Step 2: Upload 1 enrollment image to private Storage ────────────
-      // Path: face-enrollments/{authUserId}/{enrollmentId}/sample-01.jpg
-      setUploadProgress('Uploading face image…');
+      // Upload enrollment images to private Storage
+      setUploadProgress('Uploading face images…');
       const blobs = samples.map((s) => s.imageBlob);
 
       const uploadResult = await uploadEnrollmentImages(resolvedAuthUserId, enrollmentId, blobs);
@@ -220,9 +233,7 @@ export function FaceEnrollment({
         `[FaceEnrollment] Uploaded ${uploadResult.paths.length} images to face-enrollments/${resolvedAuthUserId}/${enrollmentId}/`
       );
 
-      // ── Step 3: Upsert face_enrollments row (elder_id = elder_profiles.id) ───
-      // photo_paths contain the storage paths with authUserId as folder.
-      // elder_id is the DB-level identity (elder_profiles.id).
+      // Upsert face_enrollments row
       setUploadProgress('Saving face recognition profile…');
       const dbResult = await saveFaceEnrollment(
         patientId,
@@ -234,18 +245,6 @@ export function FaceEnrollment({
       if (!dbResult.success) {
         // eslint-disable-next-line no-console
         console.error('[FaceEnrollment] DB save failed:', dbResult.error);
-        // eslint-disable-next-line no-console
-        console.info(
-          '[FaceEnrollment] Images preserved in Storage for inspection (NOT deleted).\n' +
-          `authUserId: ${resolvedAuthUserId}\n` +
-          `enrollmentId: ${enrollmentId}\n` +
-          `elderId (patientId): ${patientId}\n` +
-          `uploadedPaths: ${JSON.stringify(uploadResult.paths)}`
-        );
-
-        // NOTE: Images are NOT deleted here during debugging so you can inspect
-        // them in Supabase Storage. Once the full flow is confirmed working,
-        // cleanup can be re-enabled for partial-failure cases.
 
         setSaving(false);
         setFailed(true);
@@ -261,12 +260,10 @@ export function FaceEnrollment({
       setSavedToCloud(true);
       // eslint-disable-next-line no-console
       console.info(
-        `[FaceEnrollment] Face enrollment complete ✅ — ${samples.length} sample, ${uploadResult.paths.length} image`
+        `[FaceEnrollment] Face enrollment complete ✅ — ${samples.length} samples, ${uploadResult.paths.length} images`
       );
 
-      // ── Step 3: Save descriptor-only profile to IndexedDB as local cache ───
-      // Strip imageBlob before IndexedDB storage — blobs are large and already
-      // persisted in Supabase Storage.
+      // Save descriptor-only profile to IndexedDB as local cache
       const strippedSamples = samples.map((s) => ({
         descriptor: s.descriptor,
         capturedAt: s.capturedAt,
@@ -301,13 +298,10 @@ export function FaceEnrollment({
     const isSupabaseId = patientId.length === 36 && patientId.includes('-');
 
     const doReset = async () => {
-      // Generate a fresh enrollmentId so the next attempt uses new paths
       enrollmentIdRef.current = crypto.randomUUID();
-      // Clear Supabase if applicable
       if (isSupabaseId) {
         await deleteFaceEnrollment(patientId).catch(() => null);
       }
-      // Clear local cache
       await resetFaceProfile(patientId);
       setSamples([]);
       setDone(false);
@@ -315,8 +309,10 @@ export function FaceEnrollment({
       setFailMessage('');
       setSavedToCloud(false);
       setUploadProgress('');
+      setCountdownDisplay(null);
+      setJustCaptured(false);
       lastSpokenStep.current = -1;
-      // Restart camera
+      lastSpokenCountdown.current = -1;
       face.start();
     };
 
@@ -345,7 +341,7 @@ export function FaceEnrollment({
             <div className="text-xl font-extrabold text-brand-900">{t('face.setup.success.title')}</div>
             <p className="text-base font-semibold text-neutral-600">{t('face.setup.success.body')}</p>
 
-            {/* Cloud save confirmation — only shown after Supabase + Storage succeed */}
+            {/* Cloud save confirmation */}
             {savedToCloud && (
               <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 flex items-center gap-3">
                 <span className="text-xl">☁️</span>
@@ -355,9 +351,12 @@ export function FaceEnrollment({
               </div>
             )}
 
-            <Button variant="huge" onClick={() => { face.cancel(); onEnrolled?.(); }} className="w-full">
-              🧪 {t('face.test')}
-            </Button>
+            <button
+              onClick={() => { face.cancel(); onEnrolled?.(); }}
+              className="w-full rounded-2xl bg-brand-600 px-5 py-3.5 text-sm font-extrabold text-white shadow transition hover:bg-brand-700"
+            >
+              ✅ {t('face.test')}
+            </button>
             <button onClick={reset} className="text-xs font-semibold text-neutral-400 hover:text-neutral-600">
               {t('face.reset')}
             </button>
@@ -397,10 +396,31 @@ export function FaceEnrollment({
               modelsReady: face.modelsReady,
             }}
           >
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-full max-w-sm rounded-xl bg-brand-50 px-4 py-2 text-center text-sm font-extrabold text-brand-800 border border-brand-200 shadow-sm animate-pulse">
-                {currentPrompt}
-              </div>
+            <div className="flex flex-col items-center gap-4">
+              {/* Main instruction or countdown display */}
+              {justCaptured ? (
+                /* Show "Photo X of 3" success message after capture */
+                <div className="w-full max-w-sm rounded-xl bg-emerald-50 px-4 py-2 text-center text-sm font-extrabold text-emerald-800 border border-emerald-200 shadow-sm">
+                  {currentSuccessMessage}
+                </div>
+              ) : countdownDisplay !== null ? (
+                /* Show countdown number (3, 2, 1) */
+                <div className="flex flex-col items-center gap-2">
+                  <div className="text-6xl font-black text-brand-600 tabular-nums">
+                    {countdownDisplay}
+                  </div>
+                  <div className="text-sm font-semibold text-neutral-600">
+                    Ready to capture…
+                  </div>
+                </div>
+              ) : (
+                /* Show instruction prompt */
+                <div className="w-full max-w-sm rounded-xl bg-brand-50 px-4 py-2 text-center text-sm font-extrabold text-brand-800 border border-brand-200 shadow-sm animate-pulse">
+                  {currentPrompt}
+                </div>
+              )}
+
+              {/* Photo progress indicator */}
               <div className="flex items-center gap-1" role="progressbar" aria-valuemin={0} aria-valuemax={ENROLLMENT_SAMPLES} aria-valuenow={collected}>
                 {Array.from({ length: ENROLLMENT_SAMPLES }).map((_, i) => (
                   <span
@@ -410,12 +430,13 @@ export function FaceEnrollment({
                   />
                 ))}
               </div>
-              {/* "Capturing face sample N of 10" as required */}
+
+              {/* Photo count display */}
               <div className="text-sm font-bold text-brand-700">
-                {collected > 0
-                  ? `Capturing face sample ${collected} of ${ENROLLMENT_SAMPLES}`
-                  : t('face.samples', { current: collected, total: ENROLLMENT_SAMPLES })}
+                Photo {collected + 1} of {ENROLLMENT_SAMPLES}
               </div>
+
+              {/* Cancel button only */}
               {face.status.state !== 'error' && (
                 <button
                   onClick={face.cancel}
