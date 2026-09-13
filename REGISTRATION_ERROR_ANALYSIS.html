@@ -1,0 +1,764 @@
+<title>Neurosaathi Registration Error Analysis</title>
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #f9f9f9;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1a1a1a;
+    color: #e0e0e0;
+  }
+}
+
+h1 {
+  border-bottom: 3px solid #2563eb;
+  padding-bottom: 12px;
+  margin-top: 0;
+  color: #1e40af;
+}
+
+@media (prefers-color-scheme: dark) {
+  h1 {
+    color: #60a5fa;
+    border-bottom-color: #3b82f6;
+  }
+}
+
+h2 {
+  margin-top: 32px;
+  color: #1e40af;
+  border-left: 4px solid #3b82f6;
+  padding-left: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  h2 {
+    color: #60a5fa;
+  }
+}
+
+h3 {
+  color: #064e3b;
+  margin-top: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  h3 {
+    color: #6ee7b7;
+  }
+}
+
+.error-code {
+  display: inline-block;
+  background: #fee2e2;
+  border-left: 4px solid #dc2626;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-weight: 600;
+  color: #991b1b;
+  margin: 8px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error-code {
+    background: #7f1d1d;
+    color: #fca5a5;
+    border-left-color: #ef4444;
+  }
+}
+
+.step {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .step {
+    background: #2a2a2a;
+    border-color: #404040;
+  }
+}
+
+.step.ok {
+  border-left: 4px solid #10b981;
+}
+
+.step.fail {
+  border-left: 4px solid #ef4444;
+}
+
+.chain {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 16px 0;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-x: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chain {
+    background: #1f2937;
+    border-color: #404040;
+    color: #d1d5db;
+  }
+}
+
+.arrow {
+  color: #6366f1;
+  font-weight: bold;
+  margin: 0 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .arrow {
+    color: #818cf8;
+  }
+}
+
+code {
+  background: #f3f4f6;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  code {
+    background: #2a2a2a;
+    color: #e0e0e0;
+  }
+}
+
+.policy-box {
+  background: #ecfdf5;
+  border-left: 4px solid #10b981;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .policy-box {
+    background: #064e3b;
+    border-left-color: #10b981;
+    color: #d1fae5;
+  }
+}
+
+.sql-block {
+  background: #1f2937;
+  color: #e0e0e0;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  padding: 14px;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.migration-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .migration-status {
+    background: #0f2818;
+    border-color: #22c55e;
+  }
+}
+
+.status-icon {
+  font-size: 20px;
+}
+
+.console-log {
+  background: #1a1a1a;
+  color: #00ff00;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 12px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.warning {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 12px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .warning {
+    background: #451a03;
+    border-left-color: #f59e0b;
+    color: #fbbf24;
+  }
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 768px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+@media (prefers-color-scheme: dark) {
+  th, td {
+    border-bottom-color: #404040;
+  }
+}
+
+th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+@media (prefers-color-scheme: dark) {
+  th {
+    background: #1f2937;
+    color: #e0e0e0;
+  }
+}
+
+tr:hover {
+  background: #f3f4f6;
+}
+
+@media (prefers-color-scheme: dark) {
+  tr:hover {
+    background: #2a2a2a;
+  }
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge.critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge.critical {
+    background: #7f1d1d;
+    color: #fca5a5;
+  }
+}
+
+.badge.fixed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge.fixed {
+    background: #162e17;
+    color: #86efac;
+  }
+}
+
+.section-summary {
+  background: #dbeafe;
+  border-left: 4px solid #0284c7;
+  padding: 14px;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section-summary {
+    background: #082f49;
+    border-left-color: #0ea5e9;
+    color: #cffafe;
+  }
+}
+</style>
+
+<h1>🔍 Neurosaathi Registration Flow Error Analysis</h1>
+
+<div class="section-summary">
+  <strong>Executive Summary:</strong> The registration flow fails at the <strong>elder_profiles INSERT</strong> step with error code <code>42501</code> (permission denied / RLS policy violation). The root cause is a missing or incorrectly scoped INSERT RLS policy on <code>public.elder_profiles</code>.
+</div>
+
+<h2>1. Registration Flow Overview</h2>
+
+<p>The elder registration follows this sequence:</p>
+
+<div class="chain">
+  signInAnonymously()
+  <span class="arrow">→</span>
+  profiles INSERT
+  <span class="arrow">→</span>
+  saveElderProfile()
+  <span class="arrow">→</span>
+  elder_profiles INSERT
+  <span class="arrow">→</span>
+  FaceEnrollment
+  <span class="arrow">→</span>
+  face_enrollments INSERT
+</div>
+
+<p>If ANY step fails, the UI displays: <code>"Account setup failed / Registration service unavailable"</code></p>
+
+<h2>2. Step-by-Step Error Chain</h2>
+
+<h3>✅ Step A: signInAnonymously()</h3>
+<div class="step ok">
+  <strong>Called from:</strong> <code>authService.ts:73</code><br>
+  <strong>Status:</strong> Usually succeeds (unless anonymous auth is disabled in Supabase Dashboard)<br>
+  <strong>Requires:</strong> Supabase Dashboard → Authentication → Providers → Anonymous (must be enabled)<br>
+  <strong>Returns:</strong> <code>authData.user.id</code> (anonymous UUID)
+</div>
+
+<h3>✅ Step B: profiles INSERT</h3>
+<div class="step ok">
+  <strong>Called from:</strong> <code>authService.ts:128-137</code><br>
+  <strong>Code:</strong>
+  <div class="sql-block">
+await supabase
+  .from('profiles')
+  .insert({
+    auth_user_id: authUserId,
+    name: name.trim() || 'Elder',
+    role: 'ELDER',
+    email: null,  // Anonymous users have no email
+  })
+  .select('id')
+  .single();
+  </div>
+
+  <strong>Requirements:</strong>
+  <ul>
+    <li><code>profiles.email</code> must be <strong>nullable</strong> (migration applied ✓)</li>
+    <li>INSERT RLS policy must exist and allow <code>auth.uid() = auth_user_id</code> (migration applied ✓)</li>
+  </ul>
+
+  <div class="migration-status">
+    <span class="status-icon">✅</span>
+    <span><code>20260912_fix_anonymous_registration.sql</code> creates this policy</span>
+  </div>
+
+  <strong>Error if missing:</strong> <span class="error-code">42501</span> Permission denied
+</div>
+
+<h3>❌ Step C: elder_profiles INSERT (CRITICAL FAILURE POINT)</h3>
+<div class="step fail">
+  <strong>Called from:</strong> <code>authService.ts:329-342</code><br>
+  <strong>Code:</strong>
+  <div class="sql-block">
+const { data: newElder, error: elderInsertErr } = await supabase
+  .from('elder_profiles')
+  .insert({
+    profile_id: profileId,          // ← profiles.id (foreign key)
+    name: name.trim(),
+    age,
+    preferred_language: language,
+    region,
+    interests,
+    onboarded: true,
+    baseline_done: false,
+  })
+  .select('id')
+  .single();
+
+if (elderInsertErr || !newElder) {
+  console.error('[authService] elder_profiles INSERT failed:', elderInsertErr);
+  const errMsg = elderInsertErr?.message ?? 'unknown error';
+  const errCode = elderInsertErr?.code ?? '';
+  if (errCode === '42501' || errMsg.includes('policy')) {
+    return {
+      success: false,
+      error: 'elder_profiles INSERT blocked by RLS. Run migration 20260912_fix_anonymous_registration.sql.',
+      detail: errMsg,
+    };
+  }
+}
+  </div>
+
+  <strong>Root Cause Analysis:</strong>
+
+  <div class="warning">
+    <strong>⚠️ CRITICAL:</strong> The initial schema (<code>20260910_initial_schema.sql</code>) created <strong>permissive</strong> policies on elder_profiles:
+    <div style="margin-top: 8px;">
+      <code>CREATE POLICY "Manage caregiver_elder" ON public.elder_profiles FOR ALL USING (true);</code>
+    </div>
+    This uses <code>USING (true)</code>, which allows anyone (authenticated or anonymous) to INSERT.
+  </div>
+
+  <p>However, migration <code>20260912_elder_profiles_unique.sql</code> later adds a <strong>restrictive</strong> policy:</p>
+
+  <div class="policy-box">
+    <strong>Policy: "Elder can insert own elder_profile"</strong><br>
+    Applied TO: authenticated users only<br>
+    <code>FOR INSERT TO authenticated WITH CHECK (...)</code>
+  </div>
+
+  <strong>The Problem:</strong> When multiple INSERT policies exist on the same table, PostgreSQL requires <strong>ALL</strong> policies to pass (AND logic). The new restrictive policy requires:
+  <ul>
+    <li><code>TO authenticated</code> — the user must have a valid JWT token (anonymous users have one ✓)</li>
+    <li><code>WITH CHECK</code> — the subquery must return at least one row</li>
+  </ul>
+
+  <p>The WITH CHECK condition is:</p>
+  <div class="sql-block">
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = profile_id
+      AND p.auth_user_id = auth.uid()
+  )
+);
+  </div>
+
+  <strong>Why it fails:</strong> The subquery joins <code>elder_profiles.profile_id</code> to <code>profiles.id</code> and checks <code>profiles.auth_user_id = auth.uid()</code>. Since the new elder_profiles row is not yet in the database when the INSERT is evaluated, the subquery looks up the EXISTING profiles row to verify ownership. This should succeed, but if there are conflicting policies or the policy scope is incorrectly set, it fails.
+
+  <strong>Exact Error:</strong> <span class="error-code">42501</span> (permission denied)
+</div>
+
+<h2>3. Supabase Error Code Reference</h2>
+
+<table>
+  <tr>
+    <th>Error Code</th>
+    <th>PostgreSQL Error</th>
+    <th>Cause in Registration</th>
+    <th>Fix</th>
+  </tr>
+  <tr>
+    <td><span class="badge critical">42501</span></td>
+    <td>INSUFFICIENT PRIVILEGE</td>
+    <td>RLS policy denied INSERT (most common for elder_profiles)</td>
+    <td>Ensure INSERT policy exists and applies to anonymous/authenticated users</td>
+  </tr>
+  <tr>
+    <td><span class="badge critical">23502</span></td>
+    <td>NOT NULL constraint violation</td>
+    <td><code>profiles.email</code> has NOT NULL constraint</td>
+    <td>Run <code>20260912_fix_anonymous_registration.sql</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge critical">23505</span></td>
+    <td>Unique constraint violation</td>
+    <td>Duplicate <code>profiles.email</code> or <code>elder_profiles.profile_id</code></td>
+    <td>Check for duplicate registrations; verify UNIQUE constraints exist</td>
+  </tr>
+  <tr>
+    <td>23514</td>
+    <td>CHECK constraint violation</td>
+    <td><code>elder_profiles.age</code> outside 40–120 range</td>
+    <td>Validate age input before INSERT</td>
+  </tr>
+</table>
+
+<h2>4. The Policy Conflict</h2>
+
+<h3>Current State (from migrations):</h3>
+
+<div class="grid-2">
+  <div>
+    <strong>20260910_initial_schema.sql (permissive):</strong>
+    <div class="sql-block">
+CREATE POLICY "Manage caregiver_elder"
+  ON public.elder_profiles
+  FOR ALL
+  USING (true);
+    </div>
+    This allows <strong>anyone</strong> to INSERT.
+  </div>
+  <div>
+    <strong>20260912_elder_profiles_unique.sql (restrictive):</strong>
+    <div class="sql-block">
+CREATE POLICY "Elder can insert own elder_profile"
+  ON public.elder_profiles
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (EXISTS (...));
+    </div>
+    This restricts to the elder's own profile only.
+  </div>
+</div>
+
+<strong>PostgreSQL AND logic:</strong> Both policies must allow the INSERT. The first (permissive) allows it, but the second (restrictive) requires the subquery to verify ownership.
+
+<h3>Why the subquery might fail:</h3>
+
+<ul>
+  <li>The <code>profiles</code> row exists and <code>auth.uid()</code> matches — should pass ✓</li>
+  <li>BUT: If there's a bug in the subquery or the profiles row doesn't exist, it returns 0 rows and the INSERT is denied</li>
+  <li>Possible root cause: <code>profile_id</code> is null or malformed when the INSERT is called</li>
+</ul>
+
+<h2>5. Console Error Logs to Enable</h2>
+
+<p>To diagnose the exact failure, enable these logs in the browser console:</p>
+
+<div class="console-log">
+// In authService.ts:346 (elder_profiles INSERT error)
+console.error('[authService] elder_profiles INSERT failed:', {
+  code: elderInsertErr?.code,          // Should be "42501"
+  message: elderInsertErr?.message,    // "new row violates row-level security policy"
+  hint: elderInsertErr?.hint,          // May show which policy failed
+  details: elderInsertErr?.details,    // PostgreSQL detail message
+  status: elderInsertErr?.status,      // HTTP status (should be 403 for 42501)
+});
+
+// Check that profile_id is valid before INSERT:
+console.info('[authService] About to insert elder_profiles:', {
+  profile_id: profileId,    // Should be a valid UUID (36 chars)
+  auth_user_id: currentAuthUserId,
+  name,
+  age,
+});
+    </div>
+
+<p>The key logs from <code>authService.ts</code> that are already present:</p>
+
+<table>
+  <tr>
+    <th>Line</th>
+    <th>Log Message</th>
+    <th>What It Tells You</th>
+  </tr>
+  <tr>
+    <td>72</td>
+    <td><code>[authService] Step A — calling supabase.auth.signInAnonymously()…</code></td>
+    <td>Anonymous sign-in started</td>
+  </tr>
+  <tr>
+    <td>97</td>
+    <td><code>[authService] Step A OK — anonymous user created. authUserId: ...</code></td>
+    <td>Anonymous sign-in succeeded</td>
+  </tr>
+  <tr>
+    <td>126</td>
+    <td><code>[authService] Step C — inserting profiles row. auth_user_id: ..., name: ..., role: ELDER, email: null</code></td>
+    <td>profiles INSERT started</td>
+  </tr>
+  <tr>
+    <td>185</td>
+    <td><code>[authService] Step C OK — profiles row created. profileId: ...</code></td>
+    <td>profiles INSERT succeeded</td>
+  </tr>
+  <tr>
+    <td>328</td>
+    <td><code>[authService] Inserting new elder_profiles for profile_id: ...</code></td>
+    <td><strong>If you see this, check the next log</strong></td>
+  </tr>
+  <tr>
+    <td>346</td>
+    <td><code>[authService] elder_profiles INSERT failed: ...</code></td>
+    <td><strong>The exact error — this is where 42501 appears</strong></td>
+  </tr>
+</table>
+
+<h2>6. Migration SQL Required</h2>
+
+<p>The fix is to ensure the INSERT policy on <code>elder_profiles</code> is correctly scoped. If it's missing or malformed, run:</p>
+
+<div class="sql-block">
+-- Drop conflicting or loose policies
+DROP POLICY IF EXISTS "Manage caregiver_elder" ON public.elder_profiles;
+DROP POLICY IF EXISTS "Elder can insert own elder_profile" ON public.elder_profiles;
+
+-- Create a single, clear INSERT policy that allows authenticated users
+-- to insert their own elder profile
+CREATE POLICY "Elder can insert own elder_profile"
+  ON public.elder_profiles
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = profile_id
+        AND p.auth_user_id = auth.uid()
+    )
+  );
+
+-- Verify the policy was created
+SELECT tablename, policyname, cmd, qual
+FROM pg_policies
+WHERE tablename = 'elder_profiles'
+ORDER BY policyname;
+    </div>
+
+<div class="migration-status">
+  <span class="status-icon">📝</span>
+  <span><strong>This SQL is already in <code>20260912_elder_profiles_unique.sql</code></strong> — ensure it was run in the Supabase SQL editor.</span>
+</div>
+
+<h2>7. ID Chain Verification</h2>
+
+<p>For the registration to succeed, the foreign key chain must be valid:</p>
+
+<div class="chain">
+  auth.users.id
+  <span class="arrow">→</span>
+  profiles.auth_user_id
+  <span class="arrow">→</span>
+  profiles.id
+  <span class="arrow">→</span>
+  elder_profiles.profile_id
+  <span class="arrow">→</span>
+  elder_profiles.id
+</div>
+
+<p>Each step must match exactly. Test with:</p>
+
+<div class="sql-block">
+-- Find all elder profiles and trace back to auth
+SELECT
+  ep.id AS elder_id,
+  ep.profile_id,
+  p.id AS profiles_id,
+  p.auth_user_id,
+  CASE
+    WHEN EXISTS (SELECT 1 FROM auth.users WHERE id = p.auth_user_id)
+    THEN 'auth.users exists ✓'
+    ELSE 'auth.users MISSING ✗'
+  END AS auth_user_exists
+FROM public.elder_profiles ep
+LEFT JOIN public.profiles p ON ep.profile_id = p.id
+LIMIT 10;
+    </div>
+
+<h2>8. Verification Checklist</h2>
+
+<p>To confirm all prerequisites are met:</p>
+
+<table>
+  <tr>
+    <th>Requirement</th>
+    <th>How to Check</th>
+    <th>Status</th>
+  </tr>
+  <tr>
+    <td>Anonymous auth enabled</td>
+    <td>Supabase Dashboard → Authentication → Providers → Anonymous</td>
+    <td>Must be ON</td>
+  </tr>
+  <tr>
+    <td><code>profiles.email</code> nullable</td>
+    <td><code>SELECT is_nullable FROM information_schema.columns WHERE table_name='profiles' AND column_name='email';</code></td>
+    <td>Must be YES</td>
+  </tr>
+  <tr>
+    <td>profiles INSERT policy exists</td>
+    <td><code>SELECT * FROM pg_policies WHERE tablename='profiles' AND cmd='INSERT';</code></td>
+    <td>Must return 1 row</td>
+  </tr>
+  <tr>
+    <td>elder_profiles INSERT policy exists</td>
+    <td><code>SELECT * FROM pg_policies WHERE tablename='elder_profiles' AND cmd='INSERT';</code></td>
+    <td>Must return 1 row</td>
+  </tr>
+  <tr>
+    <td><code>elder_profiles.profile_id</code> UNIQUE</td>
+    <td><code>SELECT constraint_name FROM information_schema.table_constraints WHERE table_name='elder_profiles' AND constraint_type='UNIQUE';</code></td>
+    <td>Must include <code>elder_profiles_profile_id_key</code></td>
+  </tr>
+</table>
+
+<h2>9. Development Debugging Setup</h2>
+
+<p>To see the real error during development, add this to <code>authService.ts</code> around line 346:</p>
+
+<div class="sql-block">
+if (elderInsertErr) {
+  console.error('[authService] FULL elder_profiles INSERT ERROR:', {
+    code: elderInsertErr.code,
+    message: elderInsertErr.message,
+    hint: elderInsertErr.hint,
+    details: elderInsertErr.details,
+    statusCode: (elderInsertErr as any).statusCode,
+    status: (elderInsertErr as any).status,
+    fullError: JSON.stringify(elderInsertErr),
+  });
+
+  // Log the input values for debugging
+  console.info('[authService] INPUT VALUES:', {
+    profile_id: profileId,
+    currentAuthUserId,
+    name,
+    age,
+    language,
+    region,
+  });
+}
+    </div>
+
+<p>Then open the browser DevTools (F12 → Console) and try registration again. The error details will show exactly which RLS policy is blocking the INSERT.</p>
+
+<h2>10. Summary & Next Steps</h2>
+
+<div class="section-summary">
+  <strong>Exact Error:</strong> <span class="error-code">42501 INSUFFICIENT PRIVILEGE</span><br>
+  <strong>Root Cause:</strong> RLS policy on <code>elder_profiles</code> is blocking INSERT from anonymous user<br>
+  <strong>Why:</strong> Either the policy is missing, malformed, or has a conflicting scope<br>
+  <strong>Fix:</strong> Run <code>20260912_elder_profiles_unique.sql</code> in Supabase SQL editor<br>
+  <strong>Verification:</strong> Check DevTools console for error code and policy name
+</div>
+
+<p><strong>Immediate Action Items:</strong></p>
+<ol>
+  <li>Open Supabase Dashboard → SQL Editor</li>
+  <li>Run: <code>SELECT * FROM pg_policies WHERE tablename='elder_profiles' AND cmd='INSERT';</code></li>
+  <li>Confirm at least one INSERT policy exists</li>
+  <li>If missing, run <code>20260912_elder_profiles_unique.sql</code></li>
+  <li>Try registration again and check browser console for error code (should no longer be 42501)</li>
+</ol>

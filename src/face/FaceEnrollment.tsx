@@ -261,7 +261,7 @@ export function FaceEnrollment({
       setSavedToCloud(true);
       // eslint-disable-next-line no-console
       console.info(
-        `[FaceEnrollment] Face enrollment complete ✅ — ${samples.length} samples, ${uploadResult.paths.length} images`
+        `[FaceEnrollment] Face enrollment complete ✅ — ${samples.length} sample, ${uploadResult.paths.length} image`
       );
 
       // ── Step 3: Save descriptor-only profile to IndexedDB as local cache ───
