@@ -47,8 +47,9 @@ export interface FaceHookOptions {
   profile: FaceProfile | null;
   /** When true, collect samples instead of matching against a profile. */
   enroll?: boolean;
+  /** When true, perform global face identification without a known profile. */
+  globalMatch?: boolean;
   onSample?: (sample: FaceSample) => void;
-  /** Called when 3 consecutive matches are verified. Receives the matched descriptor. */
   onMatch?: (descriptor?: number[]) => void;
 }
 
@@ -333,9 +334,12 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         return;
       }
 
-      // ------------- matching path -------------
+      // ------------- matching path (supports both local profile and global matching) ----------
       const prof = profileRef.current;
-      if (!prof?.enrolled) {
+      const isGlobalMatching = optsRef.current.globalMatch === true;
+
+      // Profile required ONLY for local matching, not for global matching
+      if (!isGlobalMatching && !prof?.enrolled) {
         setSnap('failure', 'face.noProfile');
         return;
       }
@@ -359,37 +363,73 @@ export function useFaceRecognition(opts: FaceHookOptions): FaceHookResult {
         // Liveness satisfied or we've waited long enough — proceed to matching.
       }
 
-      setSnap('matching', 'face.verify');
-      const result = matchesProfile(face.descriptor as Float32Array, prof);
-      setConfidence(result.confidence);
-      setLastDistance(result.distance);
-      attemptsRef.current += 1;
-      setAttemptCount(attemptsRef.current);
+      // LOCAL PROFILE MATCHING MODE
+      if (!isGlobalMatching) {
+        setSnap('matching', 'face.verify');
+        const result = matchesProfile(face.descriptor as Float32Array, prof!);
+        setConfidence(result.confidence);
+        setLastDistance(result.distance);
+        attemptsRef.current += 1;
+        setAttemptCount(attemptsRef.current);
 
-      if (result.ok) {
+        if (result.ok) {
+          const next = consecutiveRef.current + 1;
+          consecutiveRef.current = next;
+          setMatchProgress(next);
+          if (next >= REQUIRED_CONSECUTIVE_MATCHES) {
+            runningRef.current = false;
+            setSnap('success', 'face.recognized');
+            // Pass the descriptor to onMatch so the component can use it for cross-device matching
+            const descriptor = Array.from(face.descriptor as Float32Array);
+            window.setTimeout(() => optsRef.current.onMatch?.(descriptor), 300);
+            cleanup();
+            return;
+          }
+          setSnap('detecting', 'face.keep');
+        } else {
+          consecutiveRef.current = 0;
+          setMatchProgress(0);
+          if (attemptsRef.current >= MAX_RECOGNITION_ATTEMPTS) {
+            setSnap('failure', 'face.tooMany');
+            runningRef.current = false;
+            cleanup();
+            return;
+          }
+          setSnap('failure', 'face.notRecognized', undefined, { hint: 'lookDirect' });
+        }
+      } else {
+        // GLOBAL MATCHING MODE — no local profile, just validate face and generate descriptor
+        setSnap('matching', 'face.verify');
+        attemptsRef.current += 1;
+        setAttemptCount(attemptsRef.current);
+
+        // For global matching, just require consecutive valid detections
         const next = consecutiveRef.current + 1;
         consecutiveRef.current = next;
         setMatchProgress(next);
+
         if (next >= REQUIRED_CONSECUTIVE_MATCHES) {
           runningRef.current = false;
           setSnap('success', 'face.recognized');
-          // Pass the descriptor to onMatch so the component can use it for cross-device matching
+          // eslint-disable-next-line no-console
+          console.info('[FaceLogin] Starting global face identification...');
+          // Pass the REAL descriptor to onMatch for global face matching
           const descriptor = Array.from(face.descriptor as Float32Array);
+          // eslint-disable-next-line no-console
+          console.info('[FaceLogin] Descriptor generated: 128 dimensions');
           window.setTimeout(() => optsRef.current.onMatch?.(descriptor), 300);
           cleanup();
           return;
         }
         setSnap('detecting', 'face.keep');
-      } else {
-        consecutiveRef.current = 0;
-        setMatchProgress(0);
+
+        // Max attempts limit for global matching too
         if (attemptsRef.current >= MAX_RECOGNITION_ATTEMPTS) {
           setSnap('failure', 'face.tooMany');
           runningRef.current = false;
           cleanup();
           return;
         }
-        setSnap('failure', 'face.notRecognized', undefined, { hint: 'lookDirect' });
       }
     } finally {
       isProcessingRef.current = false;
