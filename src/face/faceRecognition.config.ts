@@ -35,7 +35,7 @@ export const REQUIRED_CONSECUTIVE_MATCHES = 3;
 export const MAX_RECOGNITION_ATTEMPTS = 120;
 
 /** During enrollment, gather this many valid face samples. */
-export const ENROLLMENT_SAMPLES = 10;
+export const ENROLLMENT_SAMPLES = 1;
 
 /** Minimum landmark shift (px, normalised) that counts as "movement". */
 export const LIVENESS_MIN_MOVEMENT = 0.02;

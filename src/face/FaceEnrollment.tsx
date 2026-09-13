@@ -1,26 +1,29 @@
 // ============================================================================
-// FACE ENROLLMENT — live-camera, multi-sample face enrollment.
+// FACE ENROLLMENT — single-photo face registration for cross-device login.
 //
 // COMPLETE FLOW (mandatory for elder registration):
 //   1. Camera opens via useFaceRecognition(enroll: true)
-//   2. Hook collects ENROLLMENT_SAMPLES (10) real face samples.
-//      Each sample = { descriptor: number[128], capturedAt, imageBlob: Blob }
+//   2. Hook collects ENROLLMENT_SAMPLES (1) real face sample.
+//      Sample = { descriptor: number[128], capturedAt, imageBlob: Blob }
 //      The imageBlob is the JPEG frame captured at the exact same tick that
 //      produced the descriptor — guaranteed 1-to-1 correspondence.
-//   3. On 10 samples collected:
-//      a) Upload all 10 JPEG blobs to private Supabase Storage bucket
-//         'face-enrollments' under path {elder_id}/sample-NN.jpg
-//         (Storage RLS verifies elder ownership via auth chain)
+//   3. On 1 sample collected:
+//      a) Upload the JPEG blob to private Supabase Storage bucket
+//         'face-enrollments' under path {authUserId}/{enrollmentId}/sample-01.jpg
+//         (Storage RLS verifies auth ownership via auth.uid())
 //      b) Upsert face_enrollments row with:
-//           embedding   = JSON of descriptor+capturedAt arrays (no blobs)
-//           sample_count = 10
-//           photo_paths  = 10 storage paths
+//           embedding   = JSON of descriptor (128-dimensional vector)
+//           sample_count = 1
+//           photo_paths  = [storage path]
 //           is_active    = true
+//           elder_id     = elder_profiles.id (authoritative identity)
 //      c) On success: save descriptor-only profile to IndexedDB as cache
-//         (no blobs in IndexedDB — they are already in Storage)
+//         (no blobs in IndexedDB — the blob is already in Storage)
 //   4. onEnrolled() is called ONLY after BOTH storage upload AND DB write succeed.
 //   5. If upload fails: show error, allow retry. Do NOT call onEnrolled.
-//   6. If DB write fails: clean up uploaded images, show error, allow retry.
+//   6. If DB write fails: clean up uploaded image, show error, allow retry.
+//   7. Cross-device login: captures a new face, generates descriptor, compares to stored descriptor.
+//      No device-specific state — all identity stored in Supabase.
 // ============================================================================
 
 import { useEffect, useState, useRef } from 'react';
@@ -41,11 +44,7 @@ import type { FaceSample } from './types';
 
 const GUIDED_PROMPTS = [
   "Let's set up face recognition. Look at the camera.",
-  'Look at the camera',
-  'Turn slightly left',
-  'Turn slightly right',
-  'Look straight ahead',
-  'Hold still',
+  'Hold still…',
 ];
 
 export function FaceEnrollment({
@@ -189,9 +188,9 @@ export function FaceEnrollment({
         `[FaceEnrollment] persist — authUserId: ${resolvedAuthUserId}, enrollmentId: ${enrollmentId}, patientId: ${patientId}`
       );
 
-      // ── Step 2: Upload 10 enrollment images to private Storage ────────────
-      // Path: face-enrollments/{authUserId}/{enrollmentId}/sample-NN.jpg
-      setUploadProgress('Uploading face images…');
+      // ── Step 2: Upload 1 enrollment image to private Storage ────────────
+      // Path: face-enrollments/{authUserId}/{enrollmentId}/sample-01.jpg
+      setUploadProgress('Uploading face image…');
       const blobs = samples.map((s) => s.imageBlob);
 
       const uploadResult = await uploadEnrollmentImages(resolvedAuthUserId, enrollmentId, blobs);
@@ -262,7 +261,7 @@ export function FaceEnrollment({
       setSavedToCloud(true);
       // eslint-disable-next-line no-console
       console.info(
-        `[FaceEnrollment] Face enrollment complete ✅ — ${samples.length} samples, ${uploadResult.paths.length} images`
+        `[FaceEnrollment] Face enrollment complete ✅ — ${samples.length} sample, ${uploadResult.paths.length} image`
       );
 
       // ── Step 3: Save descriptor-only profile to IndexedDB as local cache ───

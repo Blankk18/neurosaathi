@@ -1,0 +1,213 @@
+<title>NeuroSaathi Registration Flow Trace</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  h1 { color: #1a1a1a; margin-bottom: 10px; }
+  h2 { color: #2c3e50; margin-top: 30px; margin-bottom: 15px; border-bottom: 3px solid #3498db; padding-bottom: 8px; }
+  h3 { color: #34495e; margin-top: 20px; margin-bottom: 10px; }
+  .phase { background: #ecf0f1; padding: 20px; margin: 20px 0; border-left: 5px solid #3498db; border-radius: 4px; }
+  .step { background: #f9f9f9; padding: 15px; margin: 10px 0; border-left: 4px solid #27ae60; border-radius: 3px; }
+  .warning { background: #fff3cd; padding: 15px; margin: 10px 0; border-left: 4px solid #f39c12; border-radius: 3px; }
+  .id-flow { background: #e8f5e9; padding: 15px; margin: 10px 0; border-left: 4px solid #4caf50; font-family: monospace; font-size: 13px; border-radius: 3px; line-height: 1.8; }
+  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+  th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+  th { background: #ecf0f1; font-weight: 600; }
+  tr:hover { background: #f9f9f9; }
+  .critical { color: #e74c3c; font-weight: bold; }
+  .ok { color: #27ae60; font-weight: bold; }
+  ul { margin: 10px 0; padding-left: 20px; }
+  li { margin: 5px 0; }
+  pre { background: #f4f4f4; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 11px; line-height: 1.4; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e0e0e0; }
+    .container { background: #2a2a2a; }
+    h1, h2, h3 { color: #e0e0e0; }
+    .phase { background: #3a3a3a; border-left-color: #5a9fd4; }
+    .step { background: #333; border-left-color: #2ecc71; }
+    .warning { background: #4a4a2a; border-left-color: #f39c12; }
+    .id-flow { background: #2a4a2a; border-left-color: #4caf50; }
+    code { background: #333; }
+    table { border-bottom-color: #444; }
+    th { background: #3a3a3a; }
+    tr:hover { background: #333; }
+    pre { background: #333; }
+  }
+</style>
+
+<div class="container">
+  <h1>🔐 NeuroSaathi Registration Flow — Complete Trace</h1>
+  <p><strong>User visits:</strong> <code>/onboarding?register=1</code></p>
+
+  <h2>Phase 1: Anonymous Authentication & Profile Row Creation</h2>
+  <div class="phase">
+    <h3>Mount: Onboarding.tsx (lines 73–116)</h3>
+    <div class="step">
+      <strong>Check existing session first</strong>
+      <ul>
+        <li>Call: <code>supabase.auth.getUser()</code></li>
+        <li>If session exists (HMR or navigation back), reuse it</li>
+      </ul>
+    </div>
+    <div class="step">
+      <strong>Step A: Anonymous Sign-In (authService.ts lines 70–97)</strong>
+      <ul>
+        <li>Call: <code>supabase.auth.signInAnonymously()</code></li>
+        <li><strong>Returns:</strong> <code>authUserId = supabase.auth.user.id</code> (UUID)</li>
+        <li><span class="critical">REQUIREMENT:</span> Supabase Dashboard must have <strong>Anonymous sign-ins ENABLED</strong></li>
+      </ul>
+    </div>
+    <div class="step">
+      <strong>Step B: Check for Existing profiles Row</strong>
+      <ul>
+        <li>Query: <code>profiles.select('id').eq('auth_user_id', authUserId).maybeSingle()</code></li>
+      </ul>
+    </div>
+    <div class="step">
+      <strong>Step C: INSERT profiles Row (lines 121–184)</strong>
+      <ul>
+        <li><strong>Fields:</strong> <code>auth_user_id, name, role='ELDER', email=null</code></li>
+        <li><span class="critical">email MUST be null for anonymous users</span></li>
+        <li><strong>Returns:</strong> <code>profileId = profiles.id</code></li>
+      </ul>
+    </div>
+    <div class="id-flow">
+      <strong>ID State After Step C:</strong><br>
+      ✓ authUserId (Supabase Auth UID)<br>
+      ✓ profileId (profiles.id)<br>
+      ✗ elderId (created at Step 5)
+    </div>
+  </div>
+
+  <h2>Phase 2: Onboarding Form (Steps 1–5)</h2>
+  <div class="phase">
+    <p>Collect name, age, language, caregiver, reminders, interests — stored in React state only, <span class="critical">NOT persisted yet</span></p>
+  </div>
+
+  <h2>Phase 3: Save Elder Profile (Step 5)</h2>
+  <div class="phase">
+    <h3>User clicks "📷 Set Up Face Recognition" (Onboarding.tsx lines 175–240)</h3>
+    <div class="step">
+      <strong>Guard: authUserId MUST exist</strong>
+      <ul>
+        <li>If <code>!authUserId</code>, error and HARD STOP</li>
+      </ul>
+    </div>
+    <div class="step">
+      <strong>Call: saveElderProfile() (authService.ts lines 197–384)</strong>
+      <ul>
+        <li>Get current auth user, get profiles row, INSERT/UPDATE elder_profiles</li>
+        <li><strong>Returns:</strong> <code>elderId = elder_profiles.id</code></li>
+        <li><span class="critical">elderId becomes the authoritative patient.id</span></li>
+      </ul>
+    </div>
+    <div class="id-flow">
+      <strong>ID State After saveElderProfile():</strong><br>
+      ✓ authUserId<br>
+      ✓ profileId<br>
+      ✓ elderId ← AUTHORITATIVE PATIENT ID
+    </div>
+    <div class="step">
+      <strong>Verify IDs Before Face Enrollment (lines 198–240)</strong>
+      <ul>
+        <li>Check: <code>profiles.auth_user_id === auth.user.id</code></li>
+        <li>Check: <code>elder_profiles.profile_id === profiles.id</code></li>
+        <li>If all pass: open FaceEnrollment; if any fail: error</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Phase 4: Face Enrollment</h2>
+  <div class="phase">
+    <h3>FaceEnrollment Component Props</h3>
+    <table>
+      <tr><th>Prop</th><th>Value</th><th>Purpose</th></tr>
+      <tr><td><code>elderId</code></td><td><code>verifiedElderId</code></td><td>elder_profiles.id (verified UUID)</td></tr>
+      <tr><td><code>open</code></td><td><code>true</code></td><td>Modal mandatory</td></tr>
+    </table>
+    <h3>Face Capture Loop (~200ms ticks)</h3>
+    <div class="step">
+      <strong>Each Recognition Tick</strong>
+      <ul>
+        <li>Call: <code>faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors()</code></li>
+        <li><span class="ok">YES, descriptors ARE generated (128-dim Float32Array)</span></li>
+        <li>Capture frame as JPEG Blob via canvas</li>
+        <li>Emit: <code>onSample({ descriptor, capturedAt, imageBlob })</code></li>
+        <li>Repeat until 10 samples collected (<code>ENROLLMENT_SAMPLES = 10</code>)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Phase 5: Upload & Database Persistence</h2>
+  <div class="phase">
+    <div class="step">
+      <strong>Guard: Patient ID MUST be valid Supabase UUID</strong>
+      <ul>
+        <li>Check: <code>patientId.length === 36 && patientId.includes('-')</code></li>
+        <li><span class="critical">Rejects any local uid() pattern</span></li>
+      </ul>
+    </div>
+    <div class="step">
+      <strong>Step 1: Upload 10 JPEGs to Storage (faceDatabaseService.ts lines 79–254)</strong>
+      <ul>
+        <li><strong>Bucket:</strong> <code>face-enrollments</code> (PRIVATE)</li>
+        <li><strong>Path:</strong> <code>{authUserId}/{enrollmentId}/sample-NN.jpg</code></li>
+        <li><strong>RLS:</strong> Path segment [1] matched against <code>auth.uid()::text</code></li>
+      </ul>
+    </div>
+    <div class="step">
+      <strong>Step 2: Upsert face_enrollments Row (lines 277–544)</strong>
+      <ul>
+        <li><strong>Auth chain verification:</strong> auth.uid() → profiles → elder_profiles → elderId</li>
+        <li><strong>INSERT/UPDATE:</strong> elder_id, embedding (JSON), sample_count, model_version, photo_paths, is_active=true</li>
+        <li><span class="critical">NO imageBlob stored in DB</span> — stripped before JSON</li>
+      </ul>
+    </div>
+    <div class="id-flow">
+      <strong>Storage Path vs DB Row:</strong><br>
+      Storage: <code>face-enrollments/{authUserId}/{enrollmentId}/sample-NN.jpg</code><br>
+      DB: <code>face_enrollments.elder_id = {elderId}</code><br>
+      (authUserId ≠ elderId — different UUIDs)
+    </div>
+  </div>
+
+  <h2>Critical Points</h2>
+  <div class="warning">
+    <h3>🔴 ID Confusion Can Occur Here</h3>
+    <ul>
+      <li><strong>authUserId vs elderId:</strong> Different UUIDs
+        <ul>
+          <li><code>authUserId = supabase.auth.user.id</code> (from Auth, for Storage RLS)</li>
+          <li><code>elderId = elder_profiles.id</code> (from DB, for FaceEnrollment)</li>
+          <li>Storage path uses authUserId; DB row uses elderId</li>
+        </ul>
+      </li>
+      <li><strong>If elderId is local uid():</strong> FaceEnrollment rejects it (line 154–160)</li>
+      <li><strong>If profileId mismatch:</strong> Registration aborts before face modal</li>
+    </ul>
+  </div>
+  <div class="warning">
+    <h3>🔴 Where Supabase Errors Happen Most</h3>
+    <ul>
+      <li><strong>RLS Failures (HTTP 403/42501):</strong> Migrations not run</li>
+      <li><strong>Storage RLS (HTTP 400/403):</strong> Path segment mismatch or policy missing</li>
+      <li><strong>NULL Constraint (HTTP 23502):</strong> profiles.email not nullable</li>
+      <li><strong>Anonymous Auth Disabled:</strong> Supabase Dashboard Provider setting not configured</li>
+      <li><strong>elder_profiles row missing:</strong> INSERT succeeded but SELECT returns nothing (race condition or RLS)</li>
+    </ul>
+  </div>
+
+  <h2>Error Source Locations</h2>
+  <div class="warning">
+    <h3>Where "Account setup failed" comes from</h3>
+    <ul>
+      <li><strong>authService.ts lines 75–86:</strong> signInAnonymously() fails</li>
+      <li><strong>authService.ts lines 152–157:</strong> profiles.insert() RLS blocked (42501)</li>
+      <li><strong>authService.ts lines 159–164:</strong> profiles.email NOT NULL (23502)</li>
+      <li><strong>Onboarding.tsx lines 222–229:</strong> elder_profiles row doesn't exist after save</li>
+      <li><strong>faceDatabaseService.ts lines 206–240:</strong> Storage upload fails (HTTP 400/403)</li>
+      <li><strong>faceDatabaseService.ts lines 459–537:</strong> face_enrollments DB write fails</li>
+    </ul>
+  </div>
+</div>
