@@ -61,12 +61,14 @@ export function FaceLogin({
   const elderIdRef = useRef<string | null>(null);
   /** Whether we're in global matching mode (unknown device). */
   const globalMatchModeRef = useRef(false);
+  /** Prevents simultaneous global match requests. */
+  const globalMatchingInProgressRef = useRef(false);
 
   // CRITICAL: Only use matched elder name if global matching succeeded.
   // NEVER show state.patient?.name before global match completes.
   const displayName = matchedElderName
     ? matchedElderName.split(' ')[0]
-    : (globalMatchModeRef.current ? 'Checking...' : state.patient?.name?.split(' ')[0] ?? 'Elder');
+    : (globalMatchModeRef.current ? 'Look at the camera to identify yourself' : (state.patient?.name?.split(' ')[0] ?? 'Elder'));
 
   // ---------------------------------------------------------------------------
   // Step 1: Resolve authoritative elder ID for MODE A (known device)
@@ -186,75 +188,62 @@ export function FaceLogin({
   // ---------------------------------------------------------------------------
   const handleMatch = useCallback(
     async (descriptor?: number[]) => {
-      if (hasLoggedRef.current) return;
-      hasLoggedRef.current = true;
-      setVerified(true);
+      // Prevent duplicate requests during active global match
+      if (globalMatchingInProgressRef.current) return;
 
-      const photo = captureFrame();
-
-      // MODE B: Global face matching (unknown device, no known elder)
+      // MODE B: Global face matching — do NOT verify until server confirms
       if (globalMatchModeRef.current && descriptor && descriptor.length === 128) {
-        // eslint-disable-next-line no-console
-        console.info('[FaceLogin] Calling global face matcher…');
+        globalMatchingInProgressRef.current = true;
+        try {
+          const faceMatch = await matchFaceDescriptorGlobally(descriptor);
+          if (faceMatch.matched && faceMatch.elderId) {
+            // ONLY now set verified / dispatch / succeed
+            hasLoggedRef.current = true;
+            setVerified(true);
+            setMatchedElderName(faceMatch.name ?? 'Elder');
 
-        const faceMatch = await matchFaceDescriptorGlobally(descriptor);
+            const matchedPatient: Patient = {
+              id: faceMatch.elderId,
+              name: faceMatch.name ?? 'Elder',
+              age: faceMatch.age ?? 0,
+              language: (faceMatch.language as any) ?? 'en',
+              region: (faceMatch.region as any) ?? 'assam',
+              caregiverName: state.patient?.caregiverName ?? '',
+              caregiverRelationship: state.patient?.caregiverRelationship ?? '',
+              interests: state.patient?.interests ?? [],
+              onboarded: true,
+              baselineDone: state.patient?.baselineDone ?? false,
+            };
+            dispatch({ type: 'RESTORE_ELDER_SESSION', patient: matchedPatient });
+            elderIdRef.current = faceMatch.elderId;
 
-        if (faceMatch.matched && faceMatch.elderId) {
-          // eslint-disable-next-line no-console
-          console.info('[FaceLogin] Global match successful: elderId=', faceMatch.elderId);
-
-          // Set matched elder name BEFORE dispatching, so UI updates immediately
-          setMatchedElderName(faceMatch.name ?? 'Elder');
-
-          // Patch app state with matched elder identity
-          const matchedPatient: Patient = {
-            id: faceMatch.elderId,
-            name: faceMatch.name ?? 'Elder',
-            age: faceMatch.age ?? 0,
-            language: (faceMatch.language as any) ?? 'en',
-            region: (faceMatch.region as any) ?? 'assam',
-            caregiverName: state.patient?.caregiverName ?? '',
-            caregiverRelationship: state.patient?.caregiverRelationship ?? '',
-            interests: state.patient?.interests ?? [],
-            onboarded: true,
-            baselineDone: state.patient?.baselineDone ?? false,
-          };
-          dispatch({ type: 'RESTORE_ELDER_SESSION', patient: matchedPatient });
-          elderIdRef.current = faceMatch.elderId;
-
-          // Speak the matched elder's name
-          const matchedName = (faceMatch.name ?? 'Elder').split(' ')[0];
-          if (state.settings.voiceOn) {
-            speakText(`${matchedName}. ${t('login.success.elder')}`);
+            const matchedName = (faceMatch.name ?? 'Elder').split(' ')[0];
+            if (state.settings.voiceOn) {
+              speakText(`${matchedName}. ${t('login.success.elder')}`);
+            }
+            setTimeout(() => onSuccess(captureFrame()), 400);
+            return;
+          } else {
+            setGlobalMatchFailed(true);
+            setGlobalMatchError('Face not recognized. Please try again or use PIN.');
+            setVerified(false);
+            return;
           }
-
-          setTimeout(() => {
-            onSuccess(photo);
-          }, 400);
-          return;
-        } else {
-          // eslint-disable-next-line no-console
-          console.warn('[FaceLogin] Global face match failed');
-          setGlobalMatchFailed(true);
-          setGlobalMatchError('Face not recognized. Please try again or use PIN.');
-          setVerified(false);
-          hasLoggedRef.current = false;
-          return;
+        } finally {
+          globalMatchingInProgressRef.current = false;
         }
       }
 
-      // MODE A: Local profile matching (existing behavior)
+      // MODE A: Local profile matching (existing behavior, verified already known)
+      hasLoggedRef.current = true;
+      setVerified(true);
       if (state.settings.voiceOn) {
         const localName = (state.patient?.name ?? 'Elder').split(' ')[0];
         speakText(`${localName}. ${t('login.success.elder')}`);
       }
-
-      // Short transition before redirect
-      setTimeout(() => {
-        onSuccess(photo);
-      }, 400);
+      setTimeout(() => onSuccess(captureFrame()), 400);
     },
-    [name, state.settings.voiceOn, speakText, t, onSuccess, state.patient, dispatch]
+    [state.settings.voiceOn, speakText, t, onSuccess, state.patient, dispatch]
   );
 
   const face = useFaceRecognition({

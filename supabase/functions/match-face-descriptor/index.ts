@@ -47,26 +47,31 @@ function euclideanDistance(a: number[], b: number[]): number {
   return Math.sqrt(sum);
 }
 
-/** Parse embedding JSON safely. */
-function parseEmbedding(embeddingJson: string): number[] | null {
+function parseAllDescriptors(embeddingJson: string): number[][] {
+  const descriptors: number[][] = [];
   try {
     const data = JSON.parse(embeddingJson);
-    // Handle both formats: array of samples or direct array
     if (Array.isArray(data)) {
-      if (data.length === 0) return null;
-      // If it's an array of objects (samples), extract first descriptor
-      if (typeof data[0] === "object" && data[0].descriptor) {
-        return data[0].descriptor;
+      if (data.length === 0) return descriptors;
+      // Array of sample objects
+      if (typeof data[0] === "object" && data[0] !== null && data[0].descriptor) {
+        for (const item of data) {
+          if (item && Array.isArray(item.descriptor) && item.descriptor.length === 128) {
+            descriptors.push(item.descriptor);
+          }
+        }
+        return descriptors;
       }
-      // If it's a direct array of numbers, use it
-      if (typeof data[0] === "number") {
-        return data;
+      // Direct array of numbers — treat as single descriptor
+      if (typeof data[0] === "number" && data.length === 128) {
+        descriptors.push(data);
+        return descriptors;
       }
     }
-    return null;
   } catch {
-    return null;
+    // ignore parse errors
   }
+  return descriptors;
 }
 
 export async function handler(
@@ -121,35 +126,45 @@ export async function handler(
       );
     }
 
-    // Find best match
-    let bestMatch: {
-      elderId: string;
-      distance: number;
-    } | null = null;
+    // Find best match across ALL stored descriptors for each elder
+    let bestMatch: { elderId: string; distance: number } | null = null;
+    let totalDescriptorsEvaluated = 0;
+
+    console.info(`[match-face-descriptor] Active enrollments: ${enrollments.length}`);
 
     for (const enrollment of enrollments) {
-      const storedDescriptor = parseEmbedding(enrollment.embedding);
-      if (!storedDescriptor) continue;
+      const storedDescriptors = parseAllDescriptors(enrollment.embedding);
+      if (storedDescriptors.length === 0) continue;
 
-      try {
-        const distance = euclideanDistance(descriptor, storedDescriptor);
-        if (!bestMatch || distance < bestMatch.distance) {
-          bestMatch = {
-            elderId: enrollment.elder_id,
-            distance,
-          };
+      let bestElderDistance = Infinity;
+      for (const sampleDescriptor of storedDescriptors) {
+        if (!sampleDescriptor || sampleDescriptor.length !== 128) continue;
+        totalDescriptorsEvaluated++;
+        try {
+          const distance = euclideanDistance(descriptor, sampleDescriptor);
+          if (distance < bestElderDistance) {
+            bestElderDistance = distance;
+          }
+        } catch (err) {
+          console.warn("Distance calculation error:", err);
+          continue;
         }
-      } catch (err) {
-        console.warn("Distance calculation error:", err);
-        continue;
+      }
+
+      if (bestElderDistance < Infinity) {
+        console.info(`[match-face-descriptor] Elder ${enrollment.elder_id}: best distance = ${bestElderDistance.toFixed(4)} (evaluated ${storedDescriptors.length} samples)`);
+        if (!bestMatch || bestElderDistance < bestMatch.distance) {
+          bestMatch = { elderId: enrollment.elder_id, distance: bestElderDistance };
+        }
       }
     }
 
+    console.info(`[match-face-descriptor] Valid descriptors evaluated: ${totalDescriptorsEvaluated}`);
+    console.info(`[match-face-descriptor] Best distance: ${bestMatch?.distance?.toFixed(4) ?? "N/A"}`);
+
     // Check if best match meets threshold
     if (!bestMatch || bestMatch.distance > FACE_MATCH_THRESHOLD) {
-      console.info(
-        `[match-face-descriptor] No match found. Best distance: ${bestMatch?.distance ?? "N/A"}`
-      );
+      console.info(`[match-face-descriptor] No match found. Best distance: ${bestMatch?.distance?.toFixed(4) ?? "N/A"}`);
       return new Response(
         JSON.stringify({ matched: false }),
         { status: 200, headers: { "Content-Type": "application/json" } }
