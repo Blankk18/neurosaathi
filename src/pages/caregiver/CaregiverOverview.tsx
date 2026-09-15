@@ -141,7 +141,7 @@ export default function CaregiverOverview() {
                 <p className="mt-0.5 text-xs text-neutral-600 font-semibold truncate">
                   {activeFaceLogin.name} signed in successfully via biometric face scan.
                 </p>
-                <p className="text-[11px] text-neutral-400 font-mono">
+                <p className="text-[11px] text-neutral-600 font-mono">
                   {new Date(activeFaceLogin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} today
                 </p>
               </div>

@@ -306,7 +306,7 @@ export default function FamilyMemories() {
                   <button
                     onClick={() => remove(f.id)}
                     className="inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-white text-accent-600 shadow-card ring-1 ring-accent-100 hover:bg-accent-50 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-200"
-                    aria-label="🗑️"
+                    aria-label={`Delete memory of ${f.name}`}
                   >
                     <TrashIcon size={20} />
                   </button>
@@ -323,7 +323,7 @@ export default function FamilyMemories() {
             <UsersIcon size={28} />
           </span>
           <div className="text-xl font-extrabold text-brand-900">Your album awaits</div>
-          <p className="max-w-md text-base font-semibold leading-relaxed text-neutral-500">Add the first family member to get started.</p>
+          <p className="max-w-md text-base font-semibold leading-relaxed text-neutral-600">Add the first family member to get started.</p>
           <Button variant="primary" onClick={openAdd} className="mt-2">
             <PlusIcon size={20} /> {t('family.add')}
           </Button>
@@ -338,8 +338,9 @@ export default function FamilyMemories() {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">{t('family.name')}</label>
+              <label className="label" htmlFor="mem-name">{t('family.name')}</label>
               <input
+                id="mem-name"
                 className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -347,8 +348,9 @@ export default function FamilyMemories() {
               />
             </div>
             <div>
-              <label className="label">{t('family.relationship')}</label>
+              <label className="label" htmlFor="mem-rel">{t('family.relationship')}</label>
               <input
+                id="mem-rel"
                 className="input"
                 value={relationship}
                 onChange={(e) => setRelationship(e.target.value)}
@@ -366,7 +368,7 @@ export default function FamilyMemories() {
                 <CameraIcon size={20} />
               </span>
               <span className="text-sm font-bold text-brand-700">{t('family.photo')}</span>
-              <span className="text-xs font-semibold text-neutral-500">JPG or PNG — stored safely on this device</span>
+              <span className="text-xs font-semibold text-neutral-600">JPG or PNG — stored safely on this device</span>
               <input
                 type="file"
                 accept="image/*"
@@ -379,15 +381,16 @@ export default function FamilyMemories() {
                 <img src={preview} alt={t('family.photo')} className="h-20 w-20 rounded-2xl object-cover shadow-sm" />
                 <div>
                   <div className="text-sm font-extrabold text-brand-900">Preview</div>
-                  <div className="text-xs font-semibold text-neutral-500">This photo will be saved with the memory.</div>
+                  <div className="text-xs font-semibold text-neutral-600">This photo will be saved with the memory.</div>
                 </div>
               </div>
             )}
           </div>
 
           <div>
-            <label className="label">{t('family.info')}</label>
+            <label className="label" htmlFor="mem-info">{t('family.info')}</label>
             <input
+              id="mem-info"
               className="input"
               value={info}
               onChange={(e) => setInfo(e.target.value)}
@@ -396,8 +399,9 @@ export default function FamilyMemories() {
           </div>
 
           <div>
-            <label className="label">{t('family.birthday')}</label>
+            <label className="label" htmlFor="mem-bday">{t('family.birthday')}</label>
             <input
+              id="mem-bday"
               className="input"
               value={birthday}
               onChange={(e) => setBirthday(e.target.value)}
@@ -406,8 +410,9 @@ export default function FamilyMemories() {
           </div>
 
           <div>
-            <label className="label">{t('family.notes')}</label>
+            <label className="label" htmlFor="mem-notes">{t('family.notes')}</label>
             <textarea
+              id="mem-notes"
               className="input"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

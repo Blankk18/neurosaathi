@@ -123,7 +123,7 @@ export default function GamesHub() {
                   <p className="text-base text-neutral-600">{t(descKey)}</p>
                 </div>
 
-                <span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 text-lg font-bold text-white shadow-sm transition-colors group-hover:bg-accent-600">
+                <span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 py-3.5 text-lg font-bold text-white shadow-sm transition-colors group-hover:bg-accent-600">
                   <PlayIcon size={18} /> Play
                 </span>
               </Card>
@@ -139,7 +139,7 @@ export default function GamesHub() {
           </span>
           <div>
             <p className="text-base font-bold text-brand-900">{t('games.adapted.banner')}</p>
-            <p className="mt-1 text-sm text-brand-700/90">
+            <p className="mt-1 text-sm text-neutral-600">
               NeuroSaathi adapts gently in the background so you get just the right level of challenge.
             </p>
           </div>
@@ -150,8 +150,8 @@ export default function GamesHub() {
             <ShieldIcon size={22} />
           </span>
           <div>
-            <p className="text-base font-bold text-brand-900">Differentiators box</p>
-            <p className="mt-1 text-sm text-warm-700">
+            <p className="text-base font-bold text-brand-900">Daily Cognitive Wellness</p>
+            <p className="mt-1 text-sm text-warm-800">
               Adaptive games built for gentle daily practice, designed to feel friendly rather than clinical.
             </p>
           </div>

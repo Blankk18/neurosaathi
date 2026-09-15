@@ -170,11 +170,11 @@ export function Chip({
 }) {
   const tones = {
     brand: 'bg-brand-100 text-brand-800',
-    warm: 'bg-warm-100 text-warm-600',
-    accent: 'bg-accent-50 text-accent-600',
-    neutral: 'bg-neutral-100 text-neutral-600',
-    info: 'bg-info-100 text-info-700',
-    danger: 'bg-danger-50 text-danger-600',
+    warm: 'bg-warm-100 text-warm-800',
+    accent: 'bg-accent-100/70 text-accent-800',
+    neutral: 'bg-neutral-100 text-neutral-700',
+    info: 'bg-info-100 text-info-800',
+    danger: 'bg-danger-100 text-danger-800',
   };
   return <span className={`chip ${tones[tone]}`}>{children}</span>;
 }
@@ -183,15 +183,16 @@ export function SectionTitle({ icon, children }: { icon?: string; children: Reac
   return (
     <h2 className="mt-6 mb-3 flex items-center gap-2 text-xl font-extrabold text-brand-900">
       {icon && <span>{icon}</span>}
-      {children}
+      <span>{children}</span>
     </h2>
   );
 }
 
 export function Disclaimer({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border-2 border-warm-200 bg-warm-50 p-4 text-sm font-semibold text-brand-800">
-      ⚕️ {children}
+    <div className="rounded-2xl border border-brand-100 bg-brand-50/60 p-3 text-xs font-semibold leading-relaxed text-brand-700">
+      <span className="font-extrabold">ℹ️ </span>
+      {children}
     </div>
   );
 }
@@ -201,42 +202,54 @@ export function Modal({
   onClose,
   title,
   children,
+  maxWidth = 'max-w-lg',
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  maxWidth?: string;
 }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = origOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-md rounded-xl2 bg-white p-6 shadow-float pop"
+        className={`w-full ${maxWidth} max-h-[90vh] flex flex-col rounded-[2rem] bg-white p-5 sm:p-7 shadow-float pop overflow-hidden`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-2xl font-extrabold text-brand-900">{title}</h3>
+        <div className="mb-4 flex shrink-0 items-center justify-between border-b border-brand-100/60 pb-3">
+          <h3 className="text-xl sm:text-2xl font-extrabold text-brand-900 tracking-tight">{title}</h3>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full bg-neutral-100 p-2 text-xl hover:bg-neutral-200"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xl font-bold text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
           >
             ✕
           </button>
         </div>
-        {children}
+        <div className="flex-1 overflow-y-auto overscroll-contain pr-1">
+          {children}
+        </div>
       </div>
     </div>,
     document.body,

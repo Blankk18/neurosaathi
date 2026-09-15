@@ -95,19 +95,19 @@ export default function PatientHome() {
             </span>
           </h1>
 
-          <p className="mt-3 max-w-[30ch] text-lg font-semibold leading-relaxed text-brand-600/80">
+          <p className="mt-3 max-w-[30ch] text-lg font-semibold leading-relaxed text-neutral-600">
             A gentle start, exactly at your pace.
           </p>
 
           <button
             onClick={() => speakText(`${greeting}, ${name}. ${t('voice.greet')}`)}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-base font-bold text-brand-700 shadow-card transition hover:bg-brand-50 hover:shadow-lift"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-base font-bold text-brand-700 shadow-card transition hover:bg-brand-50 hover:shadow-lift focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
           >
             <SpeakerIcon size={18} /> {t('home.talk')}
           </button>
 
           {adapted && (
-            <div className="mt-5 flex items-center gap-3 rounded-2xl bg-info-50 px-4 py-3 text-sm font-bold leading-snug text-info-700 ring-1 ring-info-100">
+            <div className="mt-5 flex items-center gap-3 rounded-2xl bg-info-50 px-4 py-3 text-sm font-bold leading-snug text-info-800 ring-1 ring-info-100">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-info-600 shadow-sm">
                 <SparkleIcon size={16} />
               </span>
@@ -119,58 +119,58 @@ export default function PatientHome() {
           <div className="mt-7">
             <button
               onClick={() => navigate(GAME_ROUTE['memory-match'])}
-              className="btn-huge flex w-full items-center justify-center gap-3 bg-accent-400 text-white hover:bg-accent-500 shadow-lift rounded-3xl py-6 text-xl font-extrabold tracking-tight sm:text-2xl"
+              className="btn-huge flex w-full items-center justify-center gap-3 bg-accent-500 text-white hover:bg-accent-600 shadow-lift rounded-3xl py-6 text-xl font-extrabold tracking-tight sm:text-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-accent-300"
             >
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
                 <PlayIcon size={22} />
               </span>
               {t('home.start.activity')}
             </button>
-            <p className="mt-3 text-center text-sm font-semibold tracking-wide text-brand-500">
+            <p className="mt-3 text-center text-sm font-semibold tracking-wide text-brand-700">
               2 – 5 minutes · Encouraging & easy to pause
             </p>
           </div>
         </div>
       </div>
 
-      {/* Quick actions: voice + mood — secondary hierarchy */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      {/* Quick actions: voice + mood + face setup — balanced 3-column hierarchy */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <button
           onClick={() => navigate('/voice')}
-          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift sm:p-5"
+          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:p-5"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-50 text-accent-600 transition group-hover:bg-accent-100">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-50 text-accent-700 transition group-hover:bg-accent-100">
             <MicIcon size={22} />
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-extrabold leading-tight text-brand-900 sm:text-lg">{t('home.talk')}</span>
-            <span className="text-xs font-bold text-brand-500 sm:text-sm">Voice assist</span>
+            <span className="text-xs font-bold text-brand-700 sm:text-sm">Voice assist</span>
           </span>
         </button>
         <button
           onClick={() => navigate('/mood')}
-          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift sm:p-5"
+          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:p-5"
           aria-label={t('home.mood.checkin')}
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-warm-50 text-warm-600 transition group-hover:bg-warm-100">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-warm-50 text-warm-700 transition group-hover:bg-warm-100">
             <HeartsIcon size={22} />
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-extrabold leading-tight text-brand-900 sm:text-lg">{t('home.mood.checkin')}</span>
-            <span className="text-xs font-bold text-brand-500 sm:text-sm">How are you?</span>
+            <span className="text-xs font-bold text-brand-700 sm:text-sm">How are you?</span>
           </span>
         </button>
         <button
           onClick={() => navigate('/face-setup')}
-          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift sm:p-5"
+          className="card group flex items-center gap-3 p-4 text-left transition hover:shadow-lift focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:p-5"
           aria-label={t('face.setup.button')}
         >
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 transition group-hover:bg-brand-100">
-            <span className="text-xl" aria-hidden>🛡️</span>
+            <span className="text-xl" aria-hidden="true">🛡️</span>
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-extrabold leading-tight text-brand-900 sm:text-lg">{t('face.setup.button')}</span>
-            <span className="text-xs font-bold text-brand-500 sm:text-sm">Sign in with your face</span>
+            <span className="text-xs font-bold text-brand-700 sm:text-sm">Sign in with face</span>
           </span>
         </button>
       </div>

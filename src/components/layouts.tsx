@@ -51,21 +51,21 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
   }, [location.pathname]);
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col pb-28">
+    <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]">
       <PatientTopBar />
       <AlarmOverlay />
       <main className="flex-1 px-4">{children}</main>
       <OfflineBanner />
       <nav
-        className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-xl -translate-x-1/2 items-stretch justify-between gap-1 border-t border-brand-100 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] pt-2 shadow-[0_-4px_24px_rgba(38,60,54,0.10)]"
-        aria-label="Main"
+        className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-xl -translate-x-1/2 items-stretch justify-between gap-1 border-t border-brand-100/80 bg-white/95 backdrop-blur-md px-2 pt-2 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_24px_rgba(38,60,54,0.12)]"
+        aria-label="Main Navigation"
       >
         {PATIENT_NAV.map(({ to, label, Icon }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-2 text-xs font-bold transition ${
+              `flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
                 isActive ? 'bg-brand-600 text-white shadow-lift' : 'text-neutral-500 hover:bg-brand-50 hover:text-brand-700'
               }`
             }
@@ -73,7 +73,7 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
             {({ isActive }) => (
               <>
                 <Icon active={isActive} />
-                <span>{t(label)}</span>
+                <span className="leading-tight">{t(label)}</span>
               </>
             )}
           </NavLink>
@@ -289,26 +289,29 @@ export function CaregiverShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8">{children}</main>
+        <main className="flex-1 px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:py-6 md:px-8">{children}</main>
       </div>
 
-      {/* mobile top tabs */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto border-t border-brand-100 bg-white px-2 py-2 md:hidden">
+      {/* mobile bottom tabs with safe-area support */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 flex items-center overflow-x-auto border-t border-brand-100 bg-white/95 backdrop-blur-md px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] md:hidden"
+        aria-label="Caregiver Mobile Navigation"
+      >
         {CAREGIVER_NAV.map(({ to, label, Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
-                isActive ? 'bg-brand-600 text-white shadow-lift' : 'text-brand-800'
+              `flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                isActive ? 'bg-brand-600 text-white shadow-lift' : 'text-brand-800 hover:bg-brand-50'
               }`
             }
           >
             <Icon active={false} /> {t(label)}
           </NavLink>
         ))}
-      </div>
+      </nav>
     </div>
   );
 }

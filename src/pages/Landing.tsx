@@ -62,7 +62,7 @@ export default function Landing() {
               <span className="inline-flex h-2 w-2 rounded-full bg-brand-500" aria-hidden />
               <span className="text-[11px] font-extrabold tracking-[0.2em] text-brand-700">NEUROSAATHI</span>
               <span className="hidden sm:inline text-brand-200">·</span>
-              <span className="hidden sm:inline text-xs font-bold tracking-wide text-brand-600">SIH 2026 · PS 26003</span>
+              <span className="hidden sm:inline text-xs font-bold tracking-wide text-brand-600">SIH 2026 · Problem 26003</span>
             </div>
 
             <h1 className="mt-5 max-w-[18ch] text-4xl font-extrabold leading-[0.95] tracking-tight text-brand-900 sm:text-5xl">
@@ -80,8 +80,8 @@ export default function Landing() {
               <Chip tone="accent">🤖 {t('landing.adaptive')}</Chip>
             </div>
 
-            {/* primary entry — one clear hierarchy, huge + secondary */}
-            <div className="mt-8 max-w-md">
+            {/* primary entry — clear breathing room and standardized CTA hierarchy */}
+            <div className="mt-10 max-w-md">
               <div className="card border border-brand-100/70 bg-white p-4 shadow-card sm:p-5">
                 <p className="mb-3 text-sm font-extrabold tracking-wide text-brand-700">
                   Choose how you&apos;d like to continue
@@ -90,35 +90,36 @@ export default function Landing() {
                   <Button variant="huge" onClick={() => pick('elder')}>
                     🧓 {t('landing.continue.elder')}
                   </Button>
-                  <Button variant="secondary" onClick={() => pick('caregiver')} className="w-full justify-center rounded-2xl border-2 border-brand-100 bg-white text-brand-800 hover:bg-brand-50">
+                  <Button variant="secondary" onClick={() => pick('caregiver')} className="w-full justify-center">
                     👨‍👩‍👧 {t('landing.continue.caregiver')}
                   </Button>
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-brand-50 pt-4">
-                  <span className="text-xs font-bold tracking-wide text-neutral-400">Trusted · Private · Offline-first</span>
+                  <span className="text-sm font-semibold tracking-normal text-neutral-600">Trusted · Private · Offline-first</span>
                   <button
+                    type="button"
                     onClick={() => navigate('/demo')}
-                    className="inline-flex items-center gap-1 text-sm font-extrabold text-brand-600 underline-offset-4 hover:underline"
+                    className="inline-flex items-center gap-1.5 text-sm font-extrabold text-brand-600 underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                   >
-                    ▶ {t('landing.demo')}
+                    <span aria-hidden="true">▶</span> {t('landing.demo')}
                   </button>
                 </div>
               </div>
 
               {/* links required by system nav — kept subtle but discoverable */}
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-sm font-bold text-brand-600 sm:justify-start">
+              <nav aria-label="System links" className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-neutral-500 sm:justify-start">
                 <button onClick={() => navigate('/privacy')} className="underline-offset-4 hover:underline hover:text-brand-700">
                   Privacy &amp; Security
                 </button>
-                <span className="h-1 w-1 rounded-full bg-brand-200" aria-hidden />
+                <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden="true" />
                 <button onClick={() => navigate('/architecture')} className="underline-offset-4 hover:underline hover:text-brand-700">
                   System Architecture
                 </button>
-                <span className="hidden sm:inline h-1 w-1 rounded-full bg-brand-200" aria-hidden />
+                <span className="hidden sm:inline h-1 w-1 rounded-full bg-neutral-300" aria-hidden="true" />
                 <button onClick={() => navigate('/login')} className="underline-offset-4 hover:underline hover:text-brand-700">
                   Sign in
                 </button>
-              </div>
+              </nav>
             </div>
           </div>
 
@@ -140,7 +141,7 @@ export default function Landing() {
                   />
                   <div className="mt-6 w-full rounded-2xl bg-brand-50/70 px-4 py-3 ring-1 ring-brand-100">
                     <p className="text-sm font-extrabold tracking-wide text-brand-800">Calm · Warm · Trustworthy</p>
-                    <p className="mt-1 text-sm leading-relaxed text-brand-700/70">
+                    <p className="mt-1 text-sm leading-relaxed text-neutral-600">
                       AI-assisted cognitive companion — culturally familiar, voice-first, and respectful by design.
                     </p>
                   </div>
@@ -149,17 +150,17 @@ export default function Landing() {
                     <div className="rounded-2xl bg-canvas px-2 py-3 ring-1 ring-brand-100/70">
                       <div className="text-lg" aria-hidden>🧩</div>
                       <div className="mt-1 text-xs font-extrabold leading-tight text-brand-800">Cognitive games</div>
-                      <div className="text-[11px] font-semibold text-neutral-500">adaptive</div>
+                      <div className="text-[11px] font-semibold text-neutral-600">adaptive</div>
                     </div>
                     <div className="rounded-2xl bg-canvas px-2 py-3 ring-1 ring-brand-100/70">
                       <div className="text-lg" aria-hidden>🛡️</div>
                       <div className="mt-1 text-xs font-extrabold leading-tight text-brand-800">Caregiver insights</div>
-                      <div className="text-[11px] font-semibold text-neutral-500">trends, not diagnosis</div>
+                      <div className="text-[11px] font-semibold text-neutral-600">trends, not diagnosis</div>
                     </div>
                     <div className="rounded-2xl bg-canvas px-2 py-3 ring-1 ring-brand-100/70">
                       <div className="text-lg" aria-hidden>📴</div>
                       <div className="mt-1 text-xs font-extrabold leading-tight text-brand-800">Works offline</div>
-                      <div className="text-[11px] font-semibold text-neutral-500">syncs later</div>
+                      <div className="text-[11px] font-semibold text-neutral-600">syncs later</div>
                     </div>
                   </div>
                 </div>
@@ -236,18 +237,23 @@ export default function Landing() {
         <section className="mt-14 overflow-hidden rounded-[2rem] bg-brand-800 p-[1px] shadow-lift">
           <div className="rounded-[1.95rem] bg-gradient-to-br from-brand-700 via-brand-700 to-brand-800 px-6 py-10 text-center sm:px-10 sm:py-12">
             <div className="mx-auto max-w-3xl">
-              <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-extrabold tracking-[0.18em] text-brand-100 ring-1 ring-white/15">
-                <span className="h-1.5 w-1.5 rounded-full bg-warm-300" aria-hidden /> REASSURING TECHNOLOGY
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-bold tracking-wider text-brand-100 ring-1 ring-white/20">
+                <span className="h-2 w-2 rounded-full bg-warm-300" aria-hidden="true" /> Reassuring Technology
               </p>
               <p className="mt-4 text-3xl font-extrabold leading-tight text-white sm:text-4xl">{t('landing.final.title')}</p>
               <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-brand-100 sm:text-lg">{t('landing.final.sub')}</p>
-              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Button variant="huge" onClick={() => pick('elder')} className="!bg-white !text-brand-800 hover:!bg-brand-50 shadow-lift">
-                  🧓 {t('landing.continue.elder')}
-                </Button>
+              <div className="mx-auto mt-8 grid w-full max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
                 <button
+                  type="button"
+                  onClick={() => pick('elder')}
+                  className="inline-flex items-center justify-center rounded-2xl bg-white px-6 py-4 text-lg font-extrabold text-brand-800 shadow-lift transition hover:bg-brand-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50"
+                >
+                  🧓 {t('landing.continue.elder')}
+                </button>
+                <button
+                  type="button"
                   onClick={() => pick('caregiver')}
-                  className="inline-flex items-center justify-center rounded-2xl bg-white/10 px-6 py-4 text-lg font-extrabold text-white ring-1 ring-white/20 hover:bg-white/15 transition"
+                  className="inline-flex items-center justify-center rounded-2xl bg-brand-100 px-6 py-4 text-lg font-extrabold text-brand-900 shadow-lift transition hover:bg-white focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50"
                 >
                   👨‍👩‍👧 {t('landing.continue.caregiver')}
                 </button>
@@ -256,13 +262,17 @@ export default function Landing() {
                 <button onClick={() => navigate('/privacy')} className="underline-offset-4 hover:underline hover:text-white">
                   Privacy-first
                 </button>
-                <span className="h-1 w-1 rounded-full bg-white/30" aria-hidden />
+                <span className="h-1 w-1 rounded-full bg-white/30" aria-hidden="true" />
                 <button onClick={() => navigate('/architecture')} className="underline-offset-4 hover:underline hover:text-white">
                   How it works
                 </button>
-                <span className="h-1 w-1 rounded-full bg-white/30" aria-hidden />
-                <button onClick={() => navigate('/demo')} className="underline-offset-4 hover:underline hover:text-white">
-                  {t('landing.demo')}
+                <span className="h-1 w-1 rounded-full bg-white/30" aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => navigate('/demo')}
+                  className="inline-flex items-center gap-1.5 font-bold text-brand-100 underline-offset-4 hover:underline hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded"
+                >
+                  <span aria-hidden="true">▶</span> {t('landing.demo')}
                 </button>
               </div>
             </div>
@@ -273,9 +283,9 @@ export default function Landing() {
         <footer className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-brand-100 py-8 text-sm font-semibold text-neutral-500 sm:flex-row">
           <div className="flex items-center gap-3">
             <img src="/neurosaathi-header.png" alt="NeuroSaathi" className="h-7 w-auto opacity-70" />
-            <span className="hidden sm:inline text-xs font-extrabold tracking-[0.16em] text-brand-700/60">NEUROSAATHI</span>
-            <span className="hidden sm:inline text-neutral-300">·</span>
-            <span className="text-xs font-bold tracking-wide text-neutral-400">© 2026 NeuroSaathi · Calm healthcare design</span>
+            <span className="hidden sm:inline text-xs font-extrabold tracking-[0.16em] text-brand-700">NEUROSAATHI</span>
+            <span className="hidden sm:inline text-neutral-400">·</span>
+            <span className="text-xs font-semibold tracking-wide text-neutral-600">© 2026 NeuroSaathi · Calm healthcare design</span>
           </div>
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/privacy')} className="font-bold text-brand-600 hover:text-brand-700 underline-offset-4 hover:underline">

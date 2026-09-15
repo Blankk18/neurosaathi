@@ -360,7 +360,7 @@ export function FaceLogin({
           {loadingProfile ? (
             <div className="flex h-56 w-full flex-col items-center justify-center rounded-2xl bg-neutral-50 p-6 text-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
-              <p className="mt-3 text-sm font-bold text-neutral-600">Checking biometric security profile…</p>
+              <p className="mt-3 text-sm font-bold text-neutral-600">Getting camera ready…</p>
             </div>
           ) : globalMatchFailed ? (
             /* Global matching failed — offer PIN fallback */

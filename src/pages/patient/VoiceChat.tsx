@@ -118,7 +118,7 @@ export default function VoiceChat() {
               <LightbulbIcon size={28} className="text-brand-600" />
             </div>
             <p className="text-lg font-semibold text-brand-800">{t('voice.greet')}</p>
-            <p className="max-w-xs text-base text-brand-500">
+            <p className="max-w-xs text-base font-semibold text-neutral-600">
               {t('voice.try')}: &ldquo;{t('voice.suggest.startGame')}&rdquo;, &ldquo;{t('voice.suggest.routine')}&rdquo;, &ldquo;{t('voice.suggest.reminders')}&rdquo;, &ldquo;{t('voice.suggest.next')}&rdquo; or &ldquo;{t('voice.suggest.gohome')}&rdquo;.
             </p>
           </div>
@@ -134,8 +134,8 @@ export default function VoiceChat() {
             >
               {m.from === 'assistant' && (
                 <div className="mb-1 flex items-center gap-1.5">
-                  <BrainIcon size={14} className="text-brand-500" />
-                  <span className="text-xs font-bold uppercase tracking-wide text-brand-400">NeuroSaathi</span>
+                  <BrainIcon size={14} className="text-brand-600" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-brand-600">NeuroSaathi</span>
                 </div>
               )}
               {m.text}

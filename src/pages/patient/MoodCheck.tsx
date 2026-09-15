@@ -94,7 +94,7 @@ export default function MoodCheck() {
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600">
               <HeartIcon size={16} />
             </span>
-            <p className="text-base font-semibold text-neutral-500">
+            <p className="text-base font-semibold text-neutral-600">
               Tap the one that feels closest — there is no wrong answer
             </p>
           </div>
@@ -130,7 +130,7 @@ export default function MoodCheck() {
                   </span>
 
                   {/* tiny supportive hint per mood — elderly-friendly reassurance */}
-                  <span className="text-sm font-semibold leading-none text-neutral-400">
+                  <span className="text-sm font-semibold leading-none text-neutral-600">
                     {mood === 'happy' && 'Feeling bright'}
                     {mood === 'good' && 'Doing well'}
                     {mood === 'okay' && 'Steady day'}
@@ -144,10 +144,10 @@ export default function MoodCheck() {
 
           {/* gentle footer hint */}
           <div className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-card">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent-50 text-accent-500">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent-50 text-accent-700">
               <SparkleIcon size={14} />
             </span>
-            <p className="text-sm font-semibold text-neutral-500">
+            <p className="text-sm font-semibold text-neutral-600">
               Whatever you choose, NeuroSaathi is here with you
             </p>
           </div>

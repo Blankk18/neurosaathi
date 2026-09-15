@@ -720,8 +720,8 @@ export default function Onboarding() {
             </div>
 
             {error && (
-              <div className="mt-5 flex items-center justify-center gap-2 rounded-2xl border border-accent-200 bg-accent-50 px-4 py-3 text-center text-sm font-bold text-accent-600" role="alert">
-                <span aria-hidden>⚠️</span> {error}
+              <div className="mt-5 flex items-center justify-center gap-2 rounded-2xl border border-danger-200 bg-danger-50 px-4 py-3 text-center text-sm font-bold text-danger-800" role="alert">
+                <span aria-hidden="true">⚠️</span> {error}
               </div>
             )}
 
@@ -753,7 +753,7 @@ export default function Onboarding() {
         </div>
 
         {/* reassurance footer */}
-        <p className="mx-auto mt-5 flex max-w-[520px] items-center justify-center gap-2 text-center text-xs font-semibold leading-relaxed text-brand-700/60">
+        <p className="mx-auto mt-5 flex max-w-[520px] items-center justify-center gap-2 text-center text-xs font-semibold leading-relaxed text-brand-700">
           <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
             <ShieldIcon size={12} />
           </span>
