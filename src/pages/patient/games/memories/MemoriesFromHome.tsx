@@ -14,9 +14,8 @@ import {
 import { memoryService } from '@/services/memoryService';
 import { loadImage } from '@/services/storage';
 import { useGameSession } from '@/pages/patient/games/useGameSession';
-import type { FamilyMemory } from '@/types';
 import type { ActivityChoice, ActivityRound, GameState, VisitedMemorySummary } from './types';
-import { buildMemoriesFromHomeRounds, getPersonName, getPlaceName } from './engine';
+import { buildMemoriesFromHomeRounds, BUNDLED_FALLBACK_ROUNDS, getPersonName, getPlaceName } from './engine';
 import { MemoryPhotoFrame } from './MemoryPhotoFrame';
 
 export default function MemoriesFromHome() {
@@ -28,9 +27,7 @@ export default function MemoriesFromHome() {
 
   // Game lifecycle states
   const [gameState, setGameState] = useState<GameState>('intro');
-  const [memories, setMemories] = useState<FamilyMemory[]>([]);
-  const [photos, setPhotos] = useState<Record<string, string | null>>({});
-  const [rounds, setRounds] = useState<ActivityRound[]>([]);
+  const [rounds, setRounds] = useState<ActivityRound[]>(BUNDLED_FALLBACK_ROUNDS);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
 
   // Interaction states
@@ -45,6 +42,13 @@ export default function MemoriesFromHome() {
   const [responseTimes, setResponseTimes] = useState<number[]>([]);
   const roundStartTimeRef = useRef<number>(Date.now());
 
+  // Image preloader helper
+  const preloadImage = (url: string) => {
+    if (!url || typeof url !== 'string') return;
+    const img = new Image();
+    img.src = url;
+  };
+
   // Load memories and photos for the current elder
   const loadElderMemories = async () => {
     setGameState('loading');
@@ -53,52 +57,39 @@ export default function MemoriesFromHome() {
       const remote = await memoryService.getMemories(elderId);
       const list = remote.length > 0 ? remote : state.familyMemories;
 
-      if (!list || list.length === 0) {
-        setGameState('empty');
-        return;
-      }
-
-      setMemories(list);
-
       // 2. Resolve image URLs (Supabase storage or IndexedDB blob)
       const photoMap: Record<string, string | null> = {};
-      for (const m of list) {
-        if (m.photo) {
-          photoMap[m.id] = m.photo;
-        } else {
-          try {
-            const blob = await loadImage(`fam-${m.id}`);
-            if (blob) photoMap[m.id] = URL.createObjectURL(blob);
-          } catch {
-            photoMap[m.id] = null;
+      if (list && list.length > 0) {
+        for (const m of list) {
+          if (m.photo) {
+            photoMap[m.id] = m.photo;
+          } else {
+            try {
+              const blob = await loadImage(`fam-${m.id}`);
+              if (blob) photoMap[m.id] = URL.createObjectURL(blob);
+            } catch {
+              photoMap[m.id] = null;
+            }
           }
         }
       }
-      setPhotos(photoMap);
 
-      // 3. Build deterministic activity rounds
-      const builtRounds = buildMemoriesFromHomeRounds(list, photoMap, 5);
-      if (builtRounds.length === 0) {
-        setGameState('empty');
-      } else {
-        setRounds(builtRounds);
-        setGameState('intro');
-      }
+      // 3. Build deterministic activity rounds (prioritizes real memories with photos,
+      // falls back to the guaranteed visual rounds if elder has no photo-backed memories)
+      const builtRounds = buildMemoriesFromHomeRounds(list || [], photoMap, 3);
+      setRounds(builtRounds);
+
+      // Preload the first two rounds' images
+      if (builtRounds[0]?.image) preloadImage(builtRounds[0].image);
+      if (builtRounds[1]?.image) preloadImage(builtRounds[1].image);
+
+      setGameState('intro');
     } catch {
-      // Graceful fallback to local state or empty
-      if (state.familyMemories.length > 0) {
-        const photoMap: Record<string, string | null> = {};
-        for (const m of state.familyMemories) {
-          if (m.photo) photoMap[m.id] = m.photo;
-        }
-        setPhotos(photoMap);
-        setMemories(state.familyMemories);
-        const built = buildMemoriesFromHomeRounds(state.familyMemories, photoMap, 5);
-        setRounds(built);
-        setGameState('intro');
-      } else {
-        setGameState('error');
-      }
+      // Guaranteed visual fallback
+      setRounds(BUNDLED_FALLBACK_ROUNDS);
+      if (BUNDLED_FALLBACK_ROUNDS[0]?.image) preloadImage(BUNDLED_FALLBACK_ROUNDS[0].image);
+      if (BUNDLED_FALLBACK_ROUNDS[1]?.image) preloadImage(BUNDLED_FALLBACK_ROUNDS[1].image);
+      setGameState('intro');
     }
   };
 
@@ -106,6 +97,13 @@ export default function MemoriesFromHome() {
     void loadElderMemories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elderId]);
+
+  // Preload upcoming round's image
+  useEffect(() => {
+    if (rounds[currentRoundIndex + 1]?.image) {
+      preloadImage(rounds[currentRoundIndex + 1].image);
+    }
+  }, [currentRoundIndex, rounds]);
 
   // Start the game session
   const startGame = () => {
@@ -119,7 +117,6 @@ export default function MemoriesFromHome() {
     roundStartTimeRef.current = Date.now();
     setGameState('playing');
 
-    // Announce the first question gently if speech instructions are enabled
     if (rounds[0] && state.settings.speakInstructions) {
       speakText(`${rounds[0].prompt}. ${rounds[0].subtitle || ''}`);
     }
@@ -155,8 +152,8 @@ export default function MemoriesFromHome() {
         ...prev,
         {
           id: currentRound.memory.id,
-          title: currentRound.memory.name || 'Family memory',
-          photoUrl: currentRound.photoUrl || photos[currentRound.memory.id] || null,
+          title: currentRound.alt || currentRound.memory.name || 'Family memory',
+          image: currentRound.image,
           detail: person ? `With ${person}` : place ? `In ${place}` : currentRound.memory.relationship,
         },
       ];
@@ -229,7 +226,7 @@ export default function MemoriesFromHome() {
         )}
 
         {/* =================================================================== */}
-        {/* 2. EMPTY STATE (Elder has 0 family memories)                         */}
+        {/* 2. EMPTY STATE                                                      */}
         {/* =================================================================== */}
         {gameState === 'empty' && (
           <div className="mx-auto max-w-lg pt-6 text-center">
@@ -344,7 +341,7 @@ export default function MemoriesFromHome() {
                     ✨ {t('memoriesHome.tag.personal')}
                   </span>
                   <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-bold tracking-wider backdrop-blur-sm">
-                    {memories.length} {memories.length === 1 ? 'Memory' : 'Memories'} Ready
+                    {rounds.length} Moments Ready
                   </span>
                 </div>
               </div>
@@ -381,7 +378,7 @@ export default function MemoriesFromHome() {
         )}
 
         {/* =================================================================== */}
-        {/* 5. PLAYING STATE (Interactive memory activity with 6 modes)          */}
+        {/* 5. PLAYING STATE (Image-driven memory activity)                      */}
         {/* =================================================================== */}
         {gameState === 'playing' && currentRound && (
           <div className="fade-in mx-auto max-w-3xl pt-2">
@@ -434,12 +431,12 @@ export default function MemoriesFromHome() {
 
             {/* Layout: Desktop 2-column or Mobile stack */}
             <div className="mt-5 grid items-start gap-6 lg:grid-cols-12">
-              {/* Photo viewport (Left column on desktop, or top in standard mode) */}
+              {/* Image viewport (Left column on desktop, or top in standard mode) */}
               {currentRound.mode !== 'which' && (
                 <div className="lg:col-span-6">
                   <MemoryPhotoFrame
-                    photoUrl={currentRound.photoUrl}
-                    altText={currentRound.memory.name || 'Family memory'}
+                    image={currentRound.image}
+                    alt={currentRound.alt}
                     caption={currentRound.memory.relationship ? `Your ${currentRound.memory.relationship}` : undefined}
                     tag={currentRound.memory.place || currentRound.memory.event}
                   />
@@ -470,9 +467,7 @@ export default function MemoriesFromHome() {
                     </p>
                   )}
 
-                  {/* ------------------------------------------------------------- */}
-                  {/* Standard Text Choices (Modes 1, 2, 3, 4, 6)                    */}
-                  {/* ------------------------------------------------------------- */}
+                  {/* Standard Text Choices */}
                   {currentRound.mode !== 'which' ? (
                     <div className="mt-6 flex flex-col gap-3">
                       {currentRound.choices.map((choice, idx) => {
@@ -510,9 +505,7 @@ export default function MemoriesFromHome() {
                       })}
                     </div>
                   ) : (
-                    /* ----------------------------------------------------------- */
-                    /* Multi-Photo Choices (Mode 5: Which photo is this?)          */
-                    /* ----------------------------------------------------------- */
+                    /* Multi-Photo Choices (Mode 5) */
                     <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
                       {currentRound.choices.map((choice) => {
                         const isChosen = selectedChoice?.id === choice.id;
@@ -578,7 +571,7 @@ export default function MemoriesFromHome() {
         )}
 
         {/* =================================================================== */}
-        {/* 6. COMPLETION STATE (Emotional, warm celebration with visited art)   */}
+        {/* 6. COMPLETION STATE                                                 */}
         {/* =================================================================== */}
         {gameState === 'complete' && (
           <div className="fade-in mx-auto max-w-2xl pt-2 text-center">
@@ -621,17 +614,11 @@ export default function MemoriesFromHome() {
                           className="flex items-center gap-2.5 rounded-2xl bg-white p-2 pr-3.5 shadow-card border border-warm-100"
                         >
                           <div className="h-10 w-10 overflow-hidden rounded-xl bg-warm-100">
-                            {v.photoUrl ? (
-                              <img
-                                src={v.photoUrl}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-lg">
-                                🖼️
-                              </div>
-                            )}
+                            <img
+                              src={v.image}
+                              alt={v.title}
+                              className="h-full w-full object-cover"
+                            />
                           </div>
                           <div className="text-left">
                             <div className="text-sm font-extrabold text-brand-900 leading-tight">
