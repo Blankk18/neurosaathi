@@ -137,7 +137,7 @@ export default function Baseline() {
         responseSpeed: speed,
         takenAt: new Date().toISOString(),
       },
-      difficulty: { 'memory-match': 1, 'scene-memory': 1, pattern: 1, routine: 1, 'family-memory': 1, region: 1 },
+      difficulty: { 'memory-match': 1, 'scene-memory': 1, pattern: 1, routine: 1, 'family-memory': 1, region: 1, 'memories-from-home': 1 },
       engagement: 70,
       weeklyActiveDays: 1,
       lastActiveAt: new Date().toISOString(),

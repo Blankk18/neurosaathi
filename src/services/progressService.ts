@@ -71,7 +71,9 @@ export const progressService = {
 
     const memorySessions = sessions.filter((s) => s.game_type === 'memory-match' || s.game_type === 'scene-memory');
     const attentionSessions = sessions.filter((s) => s.game_type === 'pattern' || s.game_type === 'scene-memory');
-    const recallSessions = sessions.filter((s) => s.game_type === 'family-memory' || s.game_type === 'routine');
+    const recallSessions = sessions.filter(
+      (s) => s.game_type === 'family-memory' || s.game_type === 'routine' || s.game_type === 'memories-from-home'
+    );
     const patternSessions = sessions.filter((s) => s.game_type === 'pattern');
     const routineSessions = sessions.filter((s) => s.game_type === 'routine');
 

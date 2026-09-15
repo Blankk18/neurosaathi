@@ -13,6 +13,7 @@ import PatternGame from '@/pages/patient/games/PatternGame';
 import RoutineRecall from '@/pages/patient/games/RoutineRecall';
 import FamilyMemoryGame from '@/pages/patient/games/FamilyMemoryGame';
 import RegionGame from '@/pages/patient/games/RegionGame';
+import MemoriesFromHome from '@/pages/patient/games/memories/MemoriesFromHome';
 import Reminders from '@/pages/patient/Reminders';
 import Memories from '@/pages/patient/Memories';
 import Progress from '@/pages/patient/Progress';
@@ -127,6 +128,26 @@ export default function App() {
           <PatientGate>
             <PatientShell>
               <RegionGame />
+            </PatientShell>
+          </PatientGate>
+        }
+      />
+      <Route
+        path="/games/memories"
+        element={
+          <PatientGate>
+            <PatientShell>
+              <MemoriesFromHome />
+            </PatientShell>
+          </PatientGate>
+        }
+      />
+      <Route
+        path="/games/memories-from-home"
+        element={
+          <PatientGate>
+            <PatientShell>
+              <MemoriesFromHome />
             </PatientShell>
           </PatientGate>
         }
