@@ -59,7 +59,7 @@ export function speak(text: string, lang: LanguageCode | string = 'en', enabled 
     const synth = window.speechSynthesis;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = synthesisLocale(lang as LanguageCode);
+    u.lang = synthesisLocale(lang as LanguageCode) || 'en-US';
     u.rate = 0.95;
     u.pitch = 1.05;
     // prefer a warm, familiar female Indian voice if one is available
