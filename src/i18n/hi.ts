@@ -160,6 +160,8 @@ export const hi: Record<string, string> = {
   'games.scene.desc': 'ध्यान से देखें, फिर उत्तर दें',
   'games.pattern': 'पैटर्न और ध्यान',
   'games.pattern.desc': 'आगे क्या आएगा?',
+  'games.musicMemory': 'गीत की अगली पंक्ति पहचानें',
+  'games.musicMemory.desc': 'परिचित गीत सुनें और याद करें कि आगे क्या आता है।',
   'games.routine': 'दैनिक दिनचर्या',
   'games.routine.desc': 'अपना दिन याद रखें',
   'games.family': 'पारिवारिक यादें',

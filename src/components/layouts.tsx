@@ -29,6 +29,8 @@ const PATIENT_PAGE_SPEECH: Record<string, string[]> = {
   '/games/routine': ['games.routine', 'routine.watch'],
   '/games/family': ['games.family', 'family.start.desc'],
   '/games/region': ['games.region', 'region.familiar'],
+  '/games/music-memory': ['games.musicMemory', 'games.musicMemory.desc'],
+  '/games/guess-the-next-lyric': ['games.musicMemory', 'games.musicMemory.desc'],
   '/safety': ['safety.title', 'safety.allGood'],
   '/reminders': ['reminders.title'],
   '/memories': ['family.title'],

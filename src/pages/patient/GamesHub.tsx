@@ -16,6 +16,7 @@ import {
   PlayIcon,
   SpeakerIcon,
   HeartIcon,
+  MusicIcon,
 } from '@/components/Icons';
 
 const GAME_ICONS: Record<GameKind, typeof BrainIcon> = {
@@ -27,11 +28,12 @@ const GAME_ICONS: Record<GameKind, typeof BrainIcon> = {
   'family-memory': UsersIcon,
   region: HomeIcon,
   'memories-from-home': UsersIcon,
+  'music-memory': MusicIcon,
 };
 
 const GAMES: { game: GameKind; route: string; titleKey: string; descKey: string }[] = [
   { game: 'memory-match', route: '/games/memory', titleKey: 'games.memory', descKey: 'games.memory.desc' },
-  { game: 'pattern', route: '/games/pattern', titleKey: 'games.pattern', descKey: 'games.pattern.desc' },
+  { game: 'music-memory', route: '/games/music-memory', titleKey: 'games.musicMemory', descKey: 'games.musicMemory.desc' },
   { game: 'routine', route: '/games/routine', titleKey: 'games.routine', descKey: 'games.routine.desc' },
   { game: 'family-memory', route: '/games/family', titleKey: 'games.family', descKey: 'games.family.desc' },
   { game: 'region', route: '/games/region', titleKey: 'games.region', descKey: 'games.region.desc' },
@@ -157,6 +159,50 @@ export default function GamesHub() {
             const prev = currentDifficulty(state.gameResults, game, 1);
             const d = adaptDifficulty(prev, recent);
             const Icon = GAME_ICONS[game];
+
+            if (game === 'music-memory') {
+              return (
+                <Card
+                  key={game}
+                  onClick={() => navigate(route)}
+                  className="group relative flex flex-col items-start gap-3 overflow-hidden border border-warm-200/80 p-0 transition-all hover:-translate-y-0.5 hover:shadow-lift"
+                >
+                  <div className="relative h-36 w-full overflow-hidden bg-warm-100">
+                    <img
+                      src="/assets/music-game/hero.jpg"
+                      alt="Guess the Next Lyric"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                    <div className="absolute top-3 left-3">
+                      <span className="rounded-full bg-brand-50/95 px-2.5 py-1 text-[11px] font-extrabold text-brand-800 backdrop-blur-sm shadow-soft">
+                        🎵 Music Activity
+                      </span>
+                    </div>
+                    <div className="absolute top-3 right-3">
+                      <Chip tone="brand">
+                        Gentle
+                      </Chip>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-1 flex-col justify-between w-full p-5 pt-1 space-y-3">
+                    <div className="space-y-1.5">
+                      <h3 className="font-extrabold text-brand-900 flex items-center gap-1.5">
+                        🎵 {t(titleKey) || 'Guess the Next Lyric'}
+                      </h3>
+                      <p className="text-base text-neutral-600 leading-relaxed">
+                        {t(descKey) || 'Listen to familiar songs and remember what comes next.'}
+                      </p>
+                    </div>
+
+                    <span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 py-3.5 text-lg font-bold text-white shadow-sm transition-colors group-hover:bg-accent-600">
+                      <PlayIcon size={18} /> Play
+                    </span>
+                  </div>
+                </Card>
+              );
+            }
 
             return (
               <Card

@@ -168,6 +168,8 @@ export const gu: Record<string, string> = {
   'games.scene.desc': 'ધ્યાનથી જુઓ, પછી જવાબ આપો',
   'games.pattern': 'પેટર્ન અને ધ્યાન',
   'games.pattern.desc': 'આગળ શું આવે છે?',
+  'games.musicMemory': 'ગીતની આગળની પંક્તિ ઓળખો',
+  'games.musicMemory.desc': 'જાણીતા ગીતો સાંભળો અને યાદ કરો કે આગળ શું આવે છે.',
   'games.routine': 'દૈનિક દિનચર્યા',
   'games.routine.desc': 'તમારો દિવસ યાદ રાખો',
   'games.family': 'પારિવારિક યાદો',

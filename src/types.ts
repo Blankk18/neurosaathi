@@ -33,7 +33,8 @@ export type GameKind =
   | 'routine'
   | 'family-memory'
   | 'region'
-  | 'memories-from-home';
+  | 'memories-from-home'
+  | 'music-memory';
 
 export type ReminderType =
   | 'medicine'

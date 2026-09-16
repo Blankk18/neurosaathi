@@ -35,6 +35,7 @@ const GAME_ROUTE: Record<GameKind, string> = {
   'family-memory': '/games/family',
   region: '/games/region',
   'memories-from-home': '/games/memories',
+  'music-memory': '/games/music-memory',
 };
 
 export default function PatientHome() {

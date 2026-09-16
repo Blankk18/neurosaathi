@@ -168,6 +168,8 @@ export const en: Record<string, string> = {
   'games.scene.desc': 'Look closely, then answer',
   'games.pattern': 'Pattern & Attention',
   'games.pattern.desc': 'What comes next?',
+  'games.musicMemory': 'Guess the Next Lyric',
+  'games.musicMemory.desc': 'Listen to familiar songs and remember what comes next.',
   'games.routine': 'Daily Routine',
   'games.routine.desc': 'Remember your day',
   'games.family': 'Family Memories',
