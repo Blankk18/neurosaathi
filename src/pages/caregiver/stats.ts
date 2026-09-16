@@ -75,6 +75,8 @@ function shortGame(g: GameKind): string {
     routine: 'Routine',
     'family-memory': 'Family',
     region: 'Region',
+    'memories-from-home': 'Home Memories',
+    'music-memory': 'Music Memory',
   };
   return map[g] ?? g;
 }

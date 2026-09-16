@@ -66,6 +66,9 @@
   .btn-danger {
     @apply btn bg-danger-500 text-white hover:bg-danger-600 px-5 py-3;
   }
+  .btn-white {
+    @apply btn bg-white text-brand-800 hover:bg-brand-50 px-6 py-4 text-lg shadow-card;
+  }
   .btn-huge {
     @apply btn-primary w-full text-2xl py-6 rounded-3xl;
   }

@@ -268,8 +268,9 @@ export default function Reminders() {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title={t('reminders.custom')}>
         <div className="space-y-4">
           <div>
-            <label className="label">{t('family.name')}</label>
+            <label className="label" htmlFor="rem-name">{t('family.name')}</label>
             <input
+              id="rem-name"
               className="input"
               value={addName}
               onChange={(e) => setAddName(e.target.value)}
@@ -278,16 +279,17 @@ export default function Reminders() {
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="label">
+              <label className="label" htmlFor="rem-time">
                 <span className="inline-flex items-center gap-1">
                   <ClockIcon size={14} /> {t('reminders.time.label')}
                 </span>
               </label>
-              <input className="input" type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)} />
+              <input id="rem-time" className="input" type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)} />
             </div>
             <div className="flex-1">
-              <label className="label">{t('reminders.type.label')}</label>
+              <label className="label" htmlFor="rem-type">{t('reminders.type.label')}</label>
               <select
+                id="rem-type"
                 className="input"
                 value={addType}
                 onChange={(e) => setAddType(e.target.value as ReminderType)}

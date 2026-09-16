@@ -114,7 +114,7 @@ export default function FaceSetup() {
                 </Button>
                 <button
                   onClick={() => void handleReset()}
-                  className="mt-1 text-xs font-semibold text-neutral-400 hover:text-neutral-600"
+                  className="mt-1 text-xs font-semibold text-neutral-600 hover:text-neutral-900 transition"
                 >
                   {t('face.reset')}
                 </button>

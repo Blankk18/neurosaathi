@@ -77,21 +77,21 @@ function ElderCard({
               type="button"
               id="btn-elder-face-login"
               onClick={onFace}
-              className="flex w-full items-center justify-center gap-3 rounded-[20px] bg-brand-700 px-5 py-4 text-[17px] font-extrabold text-white shadow-lift transition hover:bg-brand-800 hover:shadow-float active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-brand-700 px-5 py-4 text-[17px] font-extrabold text-white shadow-lift transition hover:bg-brand-800 hover:shadow-float active:scale-[0.98] focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
             >
               🛡️ {t('face.login.button')}
             </button>
             <button
               type="button"
               onClick={onPin}
-              className="flex w-full items-center justify-center gap-2 rounded-[20px] border-2 border-brand-100 bg-brand-50/60 px-5 py-3 text-sm font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-brand-50/60 px-5 py-3.5 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
             >
               🔐 {t('face.usePin')}
             </button>
             <button
               type="button"
               onClick={onSwitchProfile}
-              className="mt-1 text-sm font-semibold text-neutral-400 hover:text-brand-700 transition text-center"
+              className="mt-1 text-sm font-semibold text-neutral-600 hover:text-brand-700 transition text-center py-1"
             >
               Not {name || 'you'}? Switch profile or sign in with another face →
             </button>
@@ -103,7 +103,7 @@ function ElderCard({
               type="button"
               id="btn-elder-register"
               onClick={onRegister}
-              className="flex w-full items-center justify-center gap-3 rounded-[20px] bg-brand-700 px-5 py-4 text-[17px] font-extrabold text-white shadow-lift transition hover:bg-brand-800 hover:shadow-float active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-brand-700 px-5 py-4 text-[17px] font-extrabold text-white shadow-lift transition hover:bg-brand-800 hover:shadow-float active:scale-[0.98] focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
             >
               ✨ Register as Elder
             </button>
@@ -111,14 +111,14 @@ function ElderCard({
               type="button"
               id="btn-elder-face-login-returning"
               onClick={onFace}
-              className="flex w-full items-center justify-center gap-2 rounded-[20px] border-2 border-brand-100 bg-brand-50/60 px-5 py-3.5 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-brand-50/60 px-5 py-3.5 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
             >
               🛡️ Already registered? Face Login
             </button>
             <button
               type="button"
               onClick={onPin}
-              className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-neutral-200 bg-white px-5 py-3 text-sm font-extrabold text-neutral-700 transition hover:bg-neutral-50 hover:shadow-sm"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3.5 text-sm font-extrabold text-neutral-700 transition hover:bg-neutral-50 hover:shadow-sm focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
             >
               🔐 {t('face.usePin')}
             </button>
@@ -127,9 +127,9 @@ function ElderCard({
 
         {/* privacy note */}
         <div className="mt-1 flex items-center gap-2 rounded-2xl border border-brand-100 bg-brand-50/60 px-3.5 py-2.5">
-          <span className="text-base shrink-0" aria-hidden>🔒</span>
+          <span className="text-base shrink-0" aria-hidden="true">🔒</span>
           <p className="text-xs font-semibold leading-relaxed text-brand-800">
-            No passwords needed. Your face is matched locally — only the derived face descriptors are stored in the cloud.
+            Your face is used securely to identify you. Fast, private, and no passwords needed.
           </p>
         </div>
       </div>
@@ -208,14 +208,17 @@ function CaregiverCard({ onFace }: { onFace: () => void }) {
         </p>
       )}
 
-      <button type="submit" className="btn-huge !bg-accent-500 hover:!bg-accent-600 shadow-lift mt-1">
+      <button
+        type="submit"
+        className="btn-primary w-full py-4 text-lg rounded-2xl !bg-accent-500 hover:!bg-accent-600 shadow-lift mt-1 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent-300"
+      >
         🔓 {t('common.start')}
       </button>
 
       <button
         type="button"
         onClick={onFace}
-        className="mt-1 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-brand-50/60 px-4 py-3 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card"
+        className="mt-1 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-100 bg-brand-50/60 px-4 py-3.5 text-base font-extrabold text-brand-700 transition hover:bg-brand-50 hover:shadow-card focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
       >
         🛡️ {t('face.login.button')}
       </button>
@@ -333,7 +336,7 @@ function ElderPinModal({
         <button
           type="submit"
           disabled={loading}
-          className="btn-huge !bg-accent-500 hover:!bg-accent-600 shadow-lift w-full disabled:opacity-60"
+          className="btn-primary w-full py-4 text-lg rounded-2xl !bg-accent-500 hover:!bg-accent-600 shadow-lift disabled:opacity-60 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent-300"
         >
           {loading ? 'Verifying…' : `🔓 ${t('common.start')}`}
         </button>
@@ -341,7 +344,7 @@ function ElderPinModal({
         <button
           type="button"
           onClick={onClose}
-          className="w-full text-center text-sm font-semibold text-neutral-400 hover:text-neutral-600"
+          className="w-full py-2.5 text-center text-base font-bold text-neutral-600 hover:text-neutral-900 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl"
         >
           ← Cancel
         </button>
@@ -485,7 +488,7 @@ export default function Login() {
                 <CaregiverCard onFace={handleCaregiverFace} />
               </div>
 
-              <p className="mt-5 text-center text-xs font-semibold text-neutral-400">
+              <p className="mt-5 text-center text-xs font-semibold text-neutral-600">
                 Private by design · Voice-assisted · Built for families
               </p>
             </div>

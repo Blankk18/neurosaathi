@@ -73,7 +73,7 @@ export default function Memories() {
     <div className="mx-auto min-h-dvh max-w-3xl bg-canvas px-4 pb-28 pt-4">
       <PageHeader title={t('family.title')} />
 
-      <p className="mt-1 max-w-2xl text-base font-semibold leading-relaxed text-brand-700/80">
+      <p className="mt-1 max-w-2xl text-base font-semibold leading-relaxed text-neutral-600">
         Your cherished people, always close — shared with you by your family.
       </p>
 

@@ -249,7 +249,7 @@ export default function Alerts() {
 
             {a.reasons.length > 0 && (
               <div className="mt-4 rounded-2xl bg-canvas px-4 py-3.5 ring-1 ring-black/[0.04]">
-                <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-widest text-neutral-400">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-widest text-neutral-600">
                   <InfoIcon size={12} /> {t('cg.attention.why')}
                 </div>
                 <ul className="mt-2 space-y-1">
@@ -288,7 +288,7 @@ export default function Alerts() {
                   <p className="text-xs font-semibold leading-relaxed text-neutral-600">
                     Photo captured during live face scan authentication. Confirmed match on local device.
                   </p>
-                  <div className="text-[11px] font-mono text-neutral-400">
+                  <div className="text-[11px] font-mono text-neutral-600">
                     Captured: {new Date(a.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </div>
                 </div>

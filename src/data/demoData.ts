@@ -298,6 +298,8 @@ export function buildDemoState(): AppState {
         routine: 2,
         'family-memory': 2,
         region: 3,
+        'memories-from-home': 1,
+        'music-memory': 1,
       },
       engagement: 78,
       weeklyActiveDays: 5,

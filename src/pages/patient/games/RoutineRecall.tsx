@@ -199,8 +199,8 @@ export default function RoutineRecall() {
                 <div className="mt-4 text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-100 bg-brand-50 text-3xl" aria-hidden>🗓️</div>
                   <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-900">🗓️ {t('routine.watch')}</h2>
-                  <p className="mt-1 text-sm font-semibold text-neutral-500">{t('routine.memorizing')}</p>
-                  <p className="mt-1 text-xs font-semibold text-brand-400">Study the order — it will be just as shown when we ask.</p>
+                  <p className="mt-1 text-sm font-semibold text-neutral-600">{t('routine.memorizing')}</p>
+                  <p className="mt-1 text-xs font-semibold text-brand-500">Study the order — it will be just as shown when we ask.</p>
                 </div>
 
                 {/* ordered routine — calm timeline style */}
@@ -235,7 +235,7 @@ export default function RoutineRecall() {
                 <button onClick={() => setPhase('quiz')} className="mt-5 w-full rounded-2xl bg-brand-600 px-6 py-4 text-lg font-extrabold text-white shadow-lift transition hover:bg-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
                   ✓ {t('routine.ready')}
                 </button>
-                <p className="mt-2 text-center text-xs font-semibold text-neutral-400">Or wait — we will continue automatically.</p>
+                <p className="mt-2 text-center text-xs font-semibold text-neutral-600">Or wait — we will continue automatically.</p>
               </div>
             </Card>
           )}
@@ -248,7 +248,7 @@ export default function RoutineRecall() {
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-sm font-extrabold text-brand-700 shadow-soft">
                     <BrainIcon size={16} /> ❓ {qIdx + 1} / {questions.length}
                   </span>
-                  <span className="text-xs font-bold uppercase tracking-widest text-brand-400">
+                  <span className="text-xs font-bold uppercase tracking-widest text-brand-500">
                     Question {qIdx + 1} of {questions.length}
                   </span>
                 </div>
@@ -269,7 +269,7 @@ export default function RoutineRecall() {
 
               <div className="px-5 py-6 text-center sm:px-6 sm:py-7">
                 <h2 className="text-balance text-2xl font-extrabold leading-tight tracking-tight text-brand-900 sm:text-[1.7rem]">{t(questions[qIdx].promptKey)}</h2>
-                <p className="mt-2 text-sm font-semibold text-neutral-500">{t('routine.recall.hint')}</p>
+                <p className="mt-2 text-sm font-semibold text-neutral-600">{t('routine.recall.hint')}</p>
 
                 <div className="mt-6 grid gap-3 text-left">
                   {questions[qIdx].options.map((o, idx) => {
@@ -284,7 +284,7 @@ export default function RoutineRecall() {
                           {letter}
                         </span>
                         <span className="flex-1 text-[19px] font-extrabold leading-snug text-brand-900">{t(o)}</span>
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas text-neutral-400 transition group-hover:bg-brand-50 group-hover:text-brand-600">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas text-neutral-500 transition group-hover:bg-brand-50 group-hover:text-brand-600">
                           <ChevronRightIcon size={18} />
                         </span>
                       </button>
@@ -292,7 +292,7 @@ export default function RoutineRecall() {
                   })}
                 </div>
 
-                <p className="mt-5 text-center text-xs font-semibold leading-relaxed text-neutral-400">
+                <p className="mt-5 text-center text-xs font-semibold leading-relaxed text-neutral-600">
                   Tap the answer that feels right — there is no rush, and every try helps.
                 </p>
               </div>

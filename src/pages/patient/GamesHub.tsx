@@ -15,6 +15,8 @@ import {
   ShieldIcon,
   PlayIcon,
   SpeakerIcon,
+  HeartIcon,
+  MusicIcon,
 } from '@/components/Icons';
 
 const GAME_ICONS: Record<GameKind, typeof BrainIcon> = {
@@ -25,11 +27,13 @@ const GAME_ICONS: Record<GameKind, typeof BrainIcon> = {
   routine: ClockIcon,
   'family-memory': UsersIcon,
   region: HomeIcon,
+  'memories-from-home': UsersIcon,
+  'music-memory': MusicIcon,
 };
 
 const GAMES: { game: GameKind; route: string; titleKey: string; descKey: string }[] = [
   { game: 'memory-match', route: '/games/memory', titleKey: 'games.memory', descKey: 'games.memory.desc' },
-  { game: 'pattern', route: '/games/pattern', titleKey: 'games.pattern', descKey: 'games.pattern.desc' },
+  { game: 'music-memory', route: '/games/music-memory', titleKey: 'games.musicMemory', descKey: 'games.musicMemory.desc' },
   { game: 'routine', route: '/games/routine', titleKey: 'games.routine', descKey: 'games.routine.desc' },
   { game: 'family-memory', route: '/games/family', titleKey: 'games.family', descKey: 'games.family.desc' },
   { game: 'region', route: '/games/region', titleKey: 'games.region', descKey: 'games.region.desc' },
@@ -73,6 +77,59 @@ export default function GamesHub() {
         </SectionTitle>
 
         <div className="grid gap-4 sm:grid-cols-2">
+          {/* Signature Showcase: Memories from Home */}
+          <Card
+            onClick={() => navigate('/games/memories')}
+            className="group relative col-span-full overflow-hidden border border-warm-300/80 bg-gradient-to-br from-warm-50 via-white to-warm-100/60 p-0 shadow-lift transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
+          >
+            <div className="flex flex-col sm:flex-row items-stretch">
+              {/* Card Artwork */}
+              <div className="relative h-48 sm:h-auto sm:w-5/12 overflow-hidden bg-warm-100 shrink-0">
+                <img
+                  src="/assets/memories-game/card_thumb.jpg"
+                  alt=""
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t sm:bg-gradient-to-r from-black/40 via-transparent to-transparent" />
+                <div className="absolute top-3 left-3 flex items-center gap-1.5" aria-hidden>
+                  <span className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur-sm shadow-soft">
+                    ✨ {t('memoriesHome.tag.personal')}
+                  </span>
+                  <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-extrabold text-warm-800 backdrop-blur-sm shadow-soft">
+                    💛 {t('memoriesHome.tag.gentle')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="flex flex-1 flex-col justify-between p-6 sm:p-7">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex rounded-xl bg-warm-100 p-2 text-warm-800 shadow-soft">
+                      <HeartIcon size={20} />
+                    </span>
+                    <span className="text-xs font-extrabold uppercase tracking-widest text-warm-800">
+                      Family Activity
+                    </span>
+                  </div>
+
+                  <h3 className="mt-2.5 text-2xl sm:text-3xl font-extrabold tracking-tight text-brand-900">
+                    {t('memoriesHome.title')}
+                  </h3>
+                  <p className="mt-2 text-base sm:text-lg font-semibold leading-relaxed text-brand-800/90">
+                    {t('games.memoriesHome.desc')}
+                  </p>
+                </div>
+
+                <div className="mt-5 pt-2">
+                  <span className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl bg-brand-600 px-7 py-3.5 text-lg font-extrabold text-white shadow-lift transition-colors group-hover:bg-brand-700">
+                    ▶ {t('common.start')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           {/* Flagship: Family Memory Challenge — prominent, warm, full width */}
           <Card
             onClick={() => navigate('/games/family')}
@@ -103,6 +160,50 @@ export default function GamesHub() {
             const d = adaptDifficulty(prev, recent);
             const Icon = GAME_ICONS[game];
 
+            if (game === 'music-memory') {
+              return (
+                <Card
+                  key={game}
+                  onClick={() => navigate(route)}
+                  className="group relative flex flex-col items-start gap-3 overflow-hidden border border-warm-200/80 p-0 transition-all hover:-translate-y-0.5 hover:shadow-lift"
+                >
+                  <div className="relative h-36 w-full overflow-hidden bg-warm-100">
+                    <img
+                      src="/assets/music-game/hero.jpg"
+                      alt="Guess the Next Lyric"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                    <div className="absolute top-3 left-3">
+                      <span className="rounded-full bg-brand-50/95 px-2.5 py-1 text-[11px] font-extrabold text-brand-800 backdrop-blur-sm shadow-soft">
+                        🎵 Music Activity
+                      </span>
+                    </div>
+                    <div className="absolute top-3 right-3">
+                      <Chip tone="brand">
+                        Gentle
+                      </Chip>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-1 flex-col justify-between w-full p-5 pt-1 space-y-3">
+                    <div className="space-y-1.5">
+                      <h3 className="font-extrabold text-brand-900 flex items-center gap-1.5">
+                        🎵 {t(titleKey) || 'Guess the Next Lyric'}
+                      </h3>
+                      <p className="text-base text-neutral-600 leading-relaxed">
+                        {t(descKey) || 'Listen to familiar songs and remember what comes next.'}
+                      </p>
+                    </div>
+
+                    <span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 py-3.5 text-lg font-bold text-white shadow-sm transition-colors group-hover:bg-accent-600">
+                      <PlayIcon size={18} /> Play
+                    </span>
+                  </div>
+                </Card>
+              );
+            }
+
             return (
               <Card
                 key={game}
@@ -123,7 +224,7 @@ export default function GamesHub() {
                   <p className="text-base text-neutral-600">{t(descKey)}</p>
                 </div>
 
-                <span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 text-lg font-bold text-white shadow-sm transition-colors group-hover:bg-accent-600">
+                <span className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 py-3.5 text-lg font-bold text-white shadow-sm transition-colors group-hover:bg-accent-600">
                   <PlayIcon size={18} /> Play
                 </span>
               </Card>
@@ -139,7 +240,7 @@ export default function GamesHub() {
           </span>
           <div>
             <p className="text-base font-bold text-brand-900">{t('games.adapted.banner')}</p>
-            <p className="mt-1 text-sm text-brand-700/90">
+            <p className="mt-1 text-sm text-neutral-600">
               NeuroSaathi adapts gently in the background so you get just the right level of challenge.
             </p>
           </div>
@@ -150,8 +251,8 @@ export default function GamesHub() {
             <ShieldIcon size={22} />
           </span>
           <div>
-            <p className="text-base font-bold text-brand-900">Differentiators box</p>
-            <p className="mt-1 text-sm text-warm-700">
+            <p className="text-base font-bold text-brand-900">Daily Cognitive Wellness</p>
+            <p className="mt-1 text-sm text-warm-800">
               Adaptive games built for gentle daily practice, designed to feel friendly rather than clinical.
             </p>
           </div>

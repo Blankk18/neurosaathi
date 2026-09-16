@@ -50,7 +50,7 @@ export default function Settings() {
             label={`🟠 ${t('common.simulate.offline')}`}
           />
           <div className="divider my-4" />
-          <p className="text-sm font-semibold leading-relaxed text-neutral-500">
+          <p className="text-sm font-semibold leading-relaxed text-neutral-600">
             {t('cg.settings.offline.hint')}
           </p>
           <div className="pt-4">
@@ -104,7 +104,7 @@ export default function Settings() {
       <div className="fade-up" style={{ animationDelay: '210ms' }}>
         <SectionTitle icon="🗃️">{t('cg.settings.data')}</SectionTitle>
         <Card className="space-y-4">
-          <p className="text-sm font-semibold leading-relaxed text-neutral-500">
+          <p className="text-sm font-semibold leading-relaxed text-neutral-600">
             {t('cg.settings.data.hint')}
           </p>
           {!confirmReset ? (
@@ -133,7 +133,7 @@ export default function Settings() {
           <div className="flex items-center justify-between gap-3 rounded-2xl bg-warm-50/60 px-4 py-3">
             <div>
               <div className="text-sm font-extrabold text-brand-800">{t('face.title')}</div>
-              <div className="text-xs font-semibold text-neutral-500">{t('face.reset')}</div>
+              <div className="text-xs font-semibold text-neutral-600">{t('face.reset')}</div>
             </div>
             <Button variant="ghost" onClick={() => { void resetFaceProfile(); }}>
               {t('face.reset')}
